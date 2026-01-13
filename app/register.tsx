@@ -17,11 +17,12 @@ const { width } = Dimensions.get("window");
 const IS_LARGE_SCREEN = width >= 768;
 
 export default function RegisterScreen() {
-  const { setProfile, setCurrentScreen, setAuthScreen } = useAppContext();
+  const { setProfile, setCurrentScreen, setAuthScreen, register } = useAppContext();
   const colorScheme = useColorScheme();
   const darkMode = colorScheme === "dark";
 
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   // const [goal, setGoal] = useState(""); // Removed per user request
   const [gender, setGender] = useState<"masculin" | "feminin" | null>(null);
@@ -31,10 +32,18 @@ export default function RegisterScreen() {
   const [showAfrican, setShowAfrican] = useState(true);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
     if (!name.trim()) {
       setError("Merci d'indiquer un prénom ou pseudo.");
+      await HapticFeedback.notificationAsync(
+        HapticFeedback.NotificationFeedbackType.Error
+      );
+      return;
+    }
+    if (!email.trim() || !email.includes("@")) {
+      setError("Merci d'indiquer une adresse email valide.");
       await HapticFeedback.notificationAsync(
         HapticFeedback.NotificationFeedbackType.Error
       );
@@ -56,28 +65,33 @@ export default function RegisterScreen() {
     }
 
     setError("");
+    setLoading(true);
     await HapticFeedback.impactAsync(HapticFeedback.ImpactFeedbackStyle.Light);
 
-    // Créer le profil utilisateur
-    const userProfile = {
-      name: name.trim(),
-      password,
-      // goal: goal.trim(), 
-      gender,
-      language: lang,
-      preferences: {
-        showBible,
-        showCoran,
-        showAfrican,
-      },
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      const userProfile = {
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        gender,
+        language: lang,
+        preferences: {
+          showBible,
+          showCoran,
+          showAfrican,
+        },
+      };
 
-    // Mettre à jour le contexte avec le profil
-    setProfile(userProfile);
+      // Call the register function from the context
+      await register(userProfile);
 
-    // Rediriger vers l'onboarding pour les préférences
-    setCurrentScreen("onboarding");
+    } catch (err: any) {
+      console.error(err);
+      const msg = err.response?.data?.detail || "Erreur lors de l'inscription.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -121,6 +135,23 @@ export default function RegisterScreen() {
                 placeholderTextColor="rgba(4, 120, 87, 0.5)"
                 value={name}
                 onChangeText={setName}
+              />
+            </View>
+          </View>
+
+          {/* Email */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Email</Text>
+            <View style={styles.inputContainer}>
+              <Feather name="mail" size={20} color="#047857" style={{ marginLeft: 16 }} />
+              <TextInput
+                style={styles.input}
+                placeholder="exemple@email.com"
+                placeholderTextColor="rgba(4, 120, 87, 0.5)"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
               />
             </View>
           </View>
@@ -178,12 +209,13 @@ export default function RegisterScreen() {
 
           {/* Bouton d'inscription */}
           <TouchableOpacity
-            style={styles.submitButton}
+            style={[styles.submitButton, loading && { opacity: 0.7 }]}
             onPress={handleRegister}
             activeOpacity={0.8}
+            disabled={loading}
           >
-            <Text style={styles.submitButtonText}>Suivant</Text>
-            <Feather name="arrow-right" size={20} color="white" style={{ marginLeft: 8 }} />
+            <Text style={styles.submitButtonText}>{loading ? "Chargement..." : "Suivant"}</Text>
+            {!loading && <Feather name="arrow-right" size={20} color="white" style={{ marginLeft: 8 }} />}
           </TouchableOpacity>
 
           {/* Lien vers la connexion */}

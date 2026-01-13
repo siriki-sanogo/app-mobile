@@ -17,18 +17,19 @@ const { width } = Dimensions.get("window");
 const IS_LARGE_SCREEN = width >= 768;
 
 export default function LoginScreen() {
-  const { setProfile, setCurrentScreen, setAuthScreen } = useAppContext();
+  const { setProfile, setCurrentScreen, setAuthScreen, login } = useAppContext();
   const colorScheme = useColorScheme();
   const darkMode = colorScheme === "dark";
 
-  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!name.trim()) {
-      setError("Merci d'indiquer ton prénom ou pseudo.");
+    if (!email.trim()) {
+      setError("Merci d'indiquer ton email.");
       await HapticFeedback.notificationAsync(
         HapticFeedback.NotificationFeedbackType.Error
       );
@@ -43,21 +44,18 @@ export default function LoginScreen() {
     }
 
     setError("");
+    setLoading(true);
     await HapticFeedback.impactAsync(HapticFeedback.ImpactFeedbackStyle.Light);
 
-    // Créer un profil utilisateur temporaire (sans vérification de base de données pour l'instant)
-    const userProfile = {
-      name: name.trim(),
-      password,
-      language: "fr" as const,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Mettre à jour le contexte avec le profil
-    setProfile(userProfile);
-
-    // Rediriger vers le dashboard
-    setCurrentScreen("dashboard");
+    try {
+      await login(email, password);
+    } catch (err: any) {
+      console.error(err);
+      const msg = err.response?.data?.detail || "Echec de connexion.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -91,15 +89,17 @@ export default function LoginScreen() {
             </View>
           ) : null}
 
-          {/* Prénom ou pseudo */}
+          {/* Email */}
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Prénom ou pseudo</Text>
+            <Text style={styles.label}>Email</Text>
             <TextInput
               style={styles.input}
-              placeholder="Ex : Makan"
+              placeholder="exemple@email.com"
               placeholderTextColor="#9CA3AF"
-              value={name}
-              onChangeText={setName}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
             />
           </View>
 
@@ -130,11 +130,12 @@ export default function LoginScreen() {
 
           {/* Bouton de connexion */}
           <TouchableOpacity
-            style={styles.submitButton}
+            style={[styles.submitButton, loading && { opacity: 0.7 }]}
             onPress={handleLogin}
             activeOpacity={0.8}
+            disabled={loading}
           >
-            <Text style={styles.submitButtonText}>Se connecter</Text>
+            <Text style={styles.submitButtonText}>{loading ? "Connexion..." : "Se connecter"}</Text>
           </TouchableOpacity>
 
           {/* Lien vers l'inscription */}
