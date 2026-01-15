@@ -11,20 +11,27 @@ import { useAppContext } from "../contexte/AppContext";
 
 import { MOOD_ICONS } from "@/constants/data";
 
+import { useTranslation } from "../contexte/i18n";
+
 export default function HistoryScreen() {
-  const { sessions } = useAppContext();
+  const { sessions, profile } = useAppContext();
+  const t = useTranslation(profile?.language || "fr");
 
   const renderSession = ({ item }: any) => (
     <View style={styles.sessionCard}>
       <View style={styles.sessionHeader}>
         <View style={styles.sessionInfo}>
-          <Text style={styles.sessionDate}>{item.date}</Text>
-          <Text style={styles.sessionQuestion}>{item.question}</Text>
+          <Text style={styles.sessionDate}>
+            {profile?.language === 'en' ? (item.date_en || item.date) : (item.date_fr || item.date)}
+          </Text>
+          <Text style={styles.sessionQuestion}>
+            {profile?.language === 'en' ? (item.question_en || item.question) : (item.question_fr || item.question)}
+          </Text>
         </View>
         <Text style={styles.moodIcon}>{MOOD_ICONS[item.mood]}</Text>
       </View>
       <TouchableOpacity style={styles.viewButton}>
-        <Text style={styles.viewButtonText}>Voir la conversation →</Text>
+        <Text style={styles.viewButtonText}>{t("view_conversation")} →</Text>
       </TouchableOpacity>
     </View>
   );
@@ -42,9 +49,9 @@ export default function HistoryScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.emptyIcon}>💭</Text>
-          <Text style={styles.emptyTitle}>Aucune interaction</Text>
+          <Text style={styles.emptyTitle}>{t("history_empty_title")}</Text>
           <Text style={styles.emptySubtext}>
-            Commencez à parler avec l&apos;assistant pour voir votre historique
+            {t("history_empty_subtitle")}
           </Text>
         </ScrollView>
       ) : (

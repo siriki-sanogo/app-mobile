@@ -1,0 +1,37 @@
+[
+    {
+        "source": "bible",
+        "book": "Genèse",
+        "chapter": 1,
+        "verse": 1,
+        "content": "Au commencement, Dieu créa les cieux et la terre."
+    },
+    {
+        "source": "bible",
+        "book": "Genèse",
+        "chapter": 1,
+        "verse": 2,
+        "content": "La terre était informe et vide: il y avait des ténèbres à la surface de l'abîme, et l'esprit de Dieu se mouvait au-dessus des eaux."
+    },
+    {
+        "source": "coran",
+        "book": "Al-Fatiha",
+        "chapter": 1,
+        "verse": 1,
+        "content": "Au nom d'Allah, le Tout Miséricordieux, le Très Miséricordieux."
+    },
+    {
+        "source": "coran",
+        "book": "Al-Fatiha",
+        "chapter": 1,
+        "verse": 2,
+        "content": "Louange à Allah, Seigneur de l'univers."
+    },
+    {
+        "source": "african",
+        "book": "Sagesse Bambara",
+        "chapter": 0,
+        "verse": 0,
+        "content": "Une seule main ne ramasse pas la farine."
+    }
+]

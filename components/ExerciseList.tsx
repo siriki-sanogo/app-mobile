@@ -1,34 +1,59 @@
 import { Feather } from "@expo/vector-icons";
-import React from "react";
+import React, { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, useColorScheme, View } from "react-native";
+import { useAppContext } from "../contexte/AppContext";
+import VideoPlayerModal from "./VideoPlayerModal";
 
 export default function ExerciseList() {
   const colorScheme = useColorScheme();
   const darkMode = colorScheme === "dark";
 
+  const [modalVisible, setModalVisible] = useState(false);
+  const [currentVideoId, setCurrentVideoId] = useState<string | undefined>(undefined);
+
+  const { profile } = useAppContext();
+  const currentLanguage = profile?.language || "fr";
+
+  // YouTube Video IDs (From User Request)
+  const ID_COHERENCE = "r2wCA9SN4i4"; // Cohérence cardiaque
+  const ID_RESPIRATION = "FZZPXR_5s_c"; // Respiration
+  const ID_SCAN_CORPOREL = "1WAXGcKi9i8"; // Scan corporel
+  const ID_PLEINE_CONSCIENCE = "tfsSXtjHZiU"; // Pleine conscience
+  const ID_GRATITUDE = "R1cZ4s30WLQ"; // Journal de gratitude
+
   const exercises = [
     {
-      category: "Respiration",
+      category_fr: "Respiration",
+      category_en: "Breathing",
       icon: "💨",
       items: [
-        { name: "Respiration 4-7-8", duration: "5 min", rating: 4.8 },
-        { name: "Cohérence cardiaque", duration: "5 min", rating: 4.6 },
+        { name_fr: "Respiration 4-7-8", name_en: "4-7-8 Breathing", duration: "5 min", rating: 4.8, videoId: ID_RESPIRATION },
+        { name_fr: "Cohérence cardiaque", name_en: "Cardiac Coherence", duration: "5 min", rating: 4.6, videoId: ID_COHERENCE },
       ],
     },
     {
-      category: "Méditation",
+      category_fr: "Méditation",
+      category_en: "Meditation",
       icon: "🧠",
       items: [
-        { name: "Scan corporel", duration: "10 min", rating: 4.7 },
-        { name: "Pleine conscience", duration: "15 min", rating: 4.9 },
+        { name_fr: "Scan corporel", name_en: "Body Scan", duration: "10 min", rating: 4.7, videoId: ID_SCAN_CORPOREL },
+        { name_fr: "Pleine conscience", name_en: "Mindfulness", duration: "15 min", rating: 4.9, videoId: ID_PLEINE_CONSCIENCE },
       ],
     },
     {
-      category: "Gratitude",
+      category_fr: "Gratitude",
+      category_en: "Gratitude",
       icon: "💖",
-      items: [{ name: "Journal de gratitude", duration: "5 min", rating: 4.6 }],
+      items: [{ name_fr: "Journal de gratitude", name_en: "Gratitude Journal", duration: "5 min", rating: 4.6, videoId: ID_GRATITUDE }],
     },
   ];
+
+  const handlePlay = (videoId?: string) => {
+    if (videoId) {
+      setCurrentVideoId(videoId);
+      setModalVisible(true);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -37,20 +62,28 @@ export default function ExerciseList() {
         <View key={idx} style={{ marginBottom: 12 }}>
           <View style={styles.catHeader}>
             <Text style={styles.catIcon}>{cat.icon}</Text>
-            <Text style={[styles.catTitle, darkMode ? { color: "#FFF" } : {}]}>{cat.category}</Text>
+            <Text style={[styles.catTitle, darkMode ? { color: "#FFF" } : {}]}>
+              {currentLanguage === 'en' ? cat.category_en : cat.category_fr}
+            </Text>
           </View>
 
           {cat.items.map((item, i) => (
             <View key={i} style={[styles.card, darkMode ? { backgroundColor: "#071025" } : {}]}>
               <View style={styles.cardTop}>
                 <View>
-                  <Text style={[styles.itemName, darkMode ? { color: "#E6EEF8" } : {}]}>{item.name}</Text>
+                  <Text style={[styles.itemName, darkMode ? { color: "#E6EEF8" } : {}]}>
+                    {currentLanguage === 'en' ? item.name_en : item.name_fr}
+                  </Text>
                   <View style={styles.metaRow}>
                     <Text style={styles.metaText}>⏱ {item.duration}</Text>
                     <Text style={styles.rating}>★ {item.rating}</Text>
                   </View>
                 </View>
-                <TouchableOpacity style={styles.playButton} accessibilityLabel={`Démarrer ${item.name}`}>
+                <TouchableOpacity
+                  style={styles.playButton}
+                  accessibilityLabel={`Démarrer ${currentLanguage === 'en' ? item.name_en : item.name_fr}`}
+                  onPress={() => handlePlay(item.videoId)}
+                >
                   <Feather name="play" size={16} color="white" />
                 </TouchableOpacity>
               </View>
@@ -58,6 +91,12 @@ export default function ExerciseList() {
           ))}
         </View>
       ))}
+
+      <VideoPlayerModal
+        visible={modalVisible}
+        videoId={currentVideoId}
+        onClose={() => setModalVisible(false)}
+      />
     </View>
   );
 }

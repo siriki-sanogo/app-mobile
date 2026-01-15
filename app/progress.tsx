@@ -3,15 +3,27 @@ import React from "react";
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from "react-native";
 import { useAppContext } from "../contexte/AppContext";
 
+import { useTranslation } from "../contexte/i18n";
+
 const { width } = Dimensions.get("window");
 const IS_LARGE_SCREEN = width >= 768;
 
 export default function ProgressScreen() {
   const colorScheme = useColorScheme();
   const darkMode = colorScheme === "dark";
-  const { setCurrentScreen } = useAppContext();
+  const { setCurrentScreen, profile } = useAppContext();
+  const t = useTranslation(profile?.language || "fr");
 
-  const bars = [45, 60, 55, 70, 75, 80, 85];
+  // Mock Data
+  const weeklyData = [45, 60, 55, 70, 75, 80, 85];
+  const currentStreak = 5;
+  const moodCalendar = ["😊", "😐", "😊", "😊", "😰", "😊", "😌"]; // Last 7 days
+  const badges = [
+    { name: t("badge_first_step"), icon: "flag", unlocked: true },
+    { name: t("badge_3_zen"), icon: "sun", unlocked: true },
+    { name: t("badge_7_streak"), icon: "zap", unlocked: false },
+    { name: t("badge_master"), icon: "award", unlocked: false },
+  ];
 
   return (
     <View style={[styles.container, darkMode ? { backgroundColor: "#071025" } : {}]}>
@@ -22,50 +34,75 @@ export default function ProgressScreen() {
         </TouchableOpacity>
 
         <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={styles.headerTitle}>Vos progrès</Text>
-          <Text style={styles.headerSubtitle}>Analyse de votre évolution</Text>
+          <Text style={styles.headerTitle}>{t("progress_title")}</Text>
+          <Text style={styles.headerSubtitle}>{t("progress_subtitle")}</Text>
         </View>
 
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={[styles.card, { marginBottom: 12 }]}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>Cette semaine</Text>
-            <Feather name="trending-up" size={20} color="#16A34A" />
-          </View>
 
-          <View style={[styles.performanceBadge, { marginBottom: 8 }]}>
-            <Text style={styles.performanceNumber}>+25%</Text>
-            <Text style={styles.performanceLabel}>Amélioration</Text>
+        {/* Streak Section */}
+        <View style={[styles.card, styles.streakCard]}>
+          <View style={styles.streakInfo}>
+            <Text style={styles.streakNumber}>{currentStreak}</Text>
+            <View>
+              <Text style={styles.streakLabel}>{t("streak_label")}</Text>
+              <Text style={styles.streakSub}>{t("streak_sub")} 🔥</Text>
+            </View>
           </View>
+          <Feather name="zap" size={40} color="#F59E0B" />
+        </View>
 
-          <View style={styles.chartContainer}>
-            {bars.map((h, i) => (
-              <View key={i} style={styles.chartColumnWrapper}>
-                <View style={[styles.chartColumn, { height: `${h}%` }]} />
+        {/* Mood Calendar */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t("mood_history")}</Text>
+          <View style={styles.calendarRow}>
+            {moodCalendar.map((emoji, index) => (
+              <View key={index} style={styles.calendarDay}>
+                <Text style={styles.dayLabel}>{t("day_prefix")}-{6 - index}</Text>
+                <Text style={styles.dayEmoji}>{emoji}</Text>
               </View>
             ))}
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Exercices efficaces</Text>
-          <View style={{ marginTop: 8 }}>
-            {[
-              { name: "Respiration 4-7-8", improvement: "+32%" },
-              { name: "Méditation guidée", improvement: "+28%" },
-            ].map((ex, idx) => (
-              <View key={idx} style={styles.effectiveRow}>
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Feather name="heart" size={16} color="#EC4899" style={{ marginRight: 8 }} />
-                  <Text style={styles.effectiveName}>{ex.name}</Text>
-                </View>
-                <Text style={styles.effectiveImprovement}>{ex.improvement}</Text>
+        {/* Weekly Chart */}
+        <View style={[styles.card, { marginBottom: 12 }]}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>{t("wellness_week")}</Text>
+            <Feather name="trending-up" size={20} color="#16A34A" />
+          </View>
+
+          <View style={[styles.performanceBadge, { marginBottom: 8 }]}>
+            <Text style={styles.performanceNumber}>+25%</Text>
+            <Text style={styles.performanceLabel}>{t("wellness_improvement")}</Text>
+          </View>
+
+          <View style={styles.chartContainer}>
+            {weeklyData.map((h, i) => (
+              <View key={i} style={styles.chartColumnWrapper}>
+                <View style={[styles.chartColumn, { height: `${h}%` }]} />
+                <Text style={styles.chartLabel}>J{i + 1}</Text>
               </View>
             ))}
           </View>
+        </View>
+
+        {/* Achievements / Badges */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t("badges_title")}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+            {badges.map((badge, index) => (
+              <View key={index} style={[styles.badgeItem, !badge.unlocked && styles.badgeLocked]}>
+                <View style={[styles.badgeIcon, badge.unlocked ? { backgroundColor: "#FEF3C7" } : { backgroundColor: "#E5E7EB" }]}>
+                  <Feather name={badge.icon as any} size={24} color={badge.unlocked ? "#D97706" : "#9CA3AF"} />
+                </View>
+                <Text style={[styles.badgeText, !badge.unlocked && { color: "#9CA3AF" }]}>{badge.name}</Text>
+              </View>
+            ))}
+          </ScrollView>
         </View>
 
         <View style={{ height: 100 }} />
@@ -93,8 +130,8 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: "white",
     borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    padding: 16,
+    marginBottom: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -102,14 +139,33 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  cardTitle: { fontSize: 16, fontWeight: "700", color: "#1E3A8A" },
-  performanceBadge: { backgroundColor: "#ECFDF5", padding: 10, borderRadius: 10 },
+  cardTitle: { fontSize: 16, fontWeight: "700", color: "#1E3A8A", marginBottom: 12 },
+
+  // Streak Styles
+  streakCard: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFBEB", borderWidth: 1, borderColor: "#FCD34D" },
+  streakInfo: { flexDirection: "column" },
+  streakNumber: { fontSize: 32, fontWeight: "800", color: "#D97706" },
+  streakLabel: { fontSize: 14, fontWeight: "600", color: "#B45309" },
+  streakSub: { fontSize: 12, color: "#92400E" },
+
+  // Calendar
+  calendarRow: { flexDirection: "row", justifyContent: "space-between" },
+  calendarDay: { alignItems: "center" },
+  dayLabel: { fontSize: 10, color: "#6B7280", marginBottom: 4 },
+  dayEmoji: { fontSize: 20 },
+
+  // Chart
+  performanceBadge: { backgroundColor: "#ECFDF5", padding: 10, borderRadius: 10, alignSelf: 'flex-start' },
   performanceNumber: { fontSize: 22, fontWeight: "800", color: "#16A34A" },
   performanceLabel: { fontSize: 12, color: "#4B5563" },
-  chartContainer: { height: 96, backgroundColor: "#F3F4F6", borderRadius: 8, flexDirection: "row", alignItems: "flex-end", padding: 8, marginTop: 8 },
+  chartContainer: { height: 120, backgroundColor: "#F3F4F6", borderRadius: 8, flexDirection: "row", alignItems: "flex-end", padding: 8, marginTop: 8 },
   chartColumnWrapper: { flex: 1, alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 4 },
-  chartColumn: { width: 18, borderTopLeftRadius: 6, borderTopRightRadius: 6, backgroundColor: "#60A5FA" },
-  effectiveRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 8, backgroundColor: "#F8FAFC", borderRadius: 8, marginBottom: 8 },
-  effectiveName: { fontSize: 14 },
-  effectiveImprovement: { fontSize: 13, color: "#16A34A", fontWeight: "700" },
+  chartColumn: { width: 12, borderTopLeftRadius: 6, borderTopRightRadius: 6, backgroundColor: "#60A5FA" },
+  chartLabel: { fontSize: 10, color: "#6B7280", marginTop: 4 },
+
+  // Badges
+  badgeItem: { alignItems: "center", marginRight: 16, width: 70 },
+  badgeLocked: { opacity: 0.6 },
+  badgeIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: "center", alignItems: "center", marginBottom: 8 },
+  badgeText: { fontSize: 11, textAlign: "center", color: "#1F2937", fontWeight: "600" },
 });

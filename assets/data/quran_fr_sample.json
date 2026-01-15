@@ -1,0 +1,51 @@
+[
+    {
+        "source": "coran",
+        "book": "Al-Fatiha",
+        "chapter": 1,
+        "verse": 1,
+        "content": "Au nom d'Allah, le Tout Miséricordieux, le Très Miséricordieux"
+    },
+    {
+        "source": "coran",
+        "book": "Al-Fatiha",
+        "chapter": 1,
+        "verse": 2,
+        "content": "Louange à Allah, Seigneur de l'univers"
+    },
+    {
+        "source": "coran",
+        "book": "Al-Fatiha",
+        "chapter": 1,
+        "verse": 3,
+        "content": "Le Tout Miséricordieux, le Très Miséricordieux"
+    },
+    {
+        "source": "coran",
+        "book": "Al-Fatiha",
+        "chapter": 1,
+        "verse": 4,
+        "content": "Maître du Jour de la rétribution"
+    },
+    {
+        "source": "coran",
+        "book": "Al-Fatiha",
+        "chapter": 1,
+        "verse": 5,
+        "content": "C'est Toi [Seul] que nous adorons, et c'est Toi [Seul] dont nous implorons secours"
+    },
+    {
+        "source": "coran",
+        "book": "Al-Fatiha",
+        "chapter": 1,
+        "verse": 6,
+        "content": "Guide-nous dans le droit chemin"
+    },
+    {
+        "source": "coran",
+        "book": "Al-Fatiha",
+        "chapter": 1,
+        "verse": 7,
+        "content": "le chemin de ceux que Tu as comblés de faveurs, non pas de ceux qui ont encouru Ta colère, ni des égarés"
+    }
+]

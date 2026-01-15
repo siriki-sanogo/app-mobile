@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import * as Crypto from "expo-crypto";
 import * as HapticFeedback from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -15,13 +16,17 @@ import {
 } from "react-native";
 
 import { useAppContext } from "../contexte/AppContext";
+import { useTranslation } from "../contexte/i18n";
+import { createSession, saveMessage } from "../services/database";
+
+import { useNetInfo } from "@react-native-community/netinfo";
+import { useSafeAreaInsets } from "react-native-safe-area-context"; // [NEW] Safe Area
+import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
+import { fetchAIResponse } from "../services/api"; // [NEW]
+import { generateOfflineResponse } from "../utils/offlineAI";
 
 const { width } = Dimensions.get("window");
 const IS_LARGE_SCREEN = width >= 768;
-
-import { useTranslation } from "../contexte/i18n";
-import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
-import { generateOfflineResponse } from "../utils/offlineAI";
 
 export default function AssistantScreen() {
   const { messages, setMessages, setCurrentScreen, profile } = useAppContext(); // Get profile
@@ -43,6 +48,8 @@ export default function AssistantScreen() {
     micActive
   } = useSpeechRecognition();
 
+  const netInfo = useNetInfo();
+
   // Sync transcript to input when listening
   useEffect(() => {
     if (isListening && transcript) {
@@ -59,40 +66,79 @@ export default function AssistantScreen() {
     }, 100);
   }, [messages, isTyping]);
 
-  const sendMessage = async () => {
+  const handleActionPress = (action: string, messageId: string) => {
+    if (action === "navigate:exercises") {
+      setCurrentScreen("exercises");
+    } else if (action === "dismiss") {
+      // Remove actions from this specific message
+      const updatedMessages = messages.map((m) => (m.id === messageId ? { ...m, actions: undefined } : m));
+      setMessages(updatedMessages);
+      HapticFeedback.selectionAsync();
+    } else if (action === "call:emergency") {
+      // Placeholder for emergency call
+      console.log("Calling emergency");
+    }
+  };
+
+  const handleSend = async () => {
     if (!inputText.trim()) return;
 
     HapticFeedback.impactAsync(HapticFeedback.ImpactFeedbackStyle.Medium);
 
-    // 1. Add User Message
     const userText = inputText.trim();
-    const userMessage = {
-      id: Date.now().toString() + "-u",
+    setInputText("");
+
+    // Create Session if needed (for now using a fixed 'default' session or current date)
+    const sessionId = "session_default"; // In real app, manage session IDs
+    createSession({ id: sessionId, title: "Conversation", created_at: new Date().toISOString() });
+
+    const userMsg = {
+      id: Crypto.randomUUID(),
       type: "user" as const,
       text: userText,
       timestamp: new Date().toISOString(),
     };
 
+    // Save to DB
+    saveMessage({
+      id: userMsg.id,
+      session_id: sessionId,
+      role: "user",
+      content: userMsg.text,
+      timestamp: userMsg.timestamp
+    });
+
     // Update UI immediately with user message
-    setMessages(prev => [...prev, userMessage]);
-    setInputText("");
+    setMessages((prev: any[]) => [...prev, userMsg]); // Fixed TS7006
     setIsTyping(true); // Start typing animation
 
     try {
-      // 2. Get Offline Response
-      // Pass language to AI
-      const responseText = await generateOfflineResponse(userText, currentLanguage);
+      // 2. Get Response (Online -> Offline Fallback)
+      let response = null;
+
+      // Try Online if connected
+      if (netInfo.isConnected !== false) {
+        response = await fetchAIResponse(userText, profile, currentLanguage);
+      }
+
+      // Fallback to Offline
+      if (!response) {
+        console.log("Using Offline AI");
+        response = await generateOfflineResponse(userText, profile, currentLanguage);
+      }
 
       const assistantMessage = {
         id: Date.now().toString() + "-a",
         type: "assistant" as const,
-        text: responseText,
+        text: response.text,
         timestamp: new Date().toISOString(),
         helpful: null,
+        actions: response.actions // Attach actions if present
       };
 
       // 3. Add Assistant Message
-      setMessages(prev => [...prev, assistantMessage]);
+      // 3. Add Assistant Message
+      setMessages((prev: any[]) => [...prev, assistantMessage]);
       HapticFeedback.notificationAsync(HapticFeedback.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("AI Error", error);
@@ -100,6 +146,23 @@ export default function AssistantScreen() {
       setIsTyping(false);
     }
   };
+
+  // Dynamic Default Message Translation
+  useEffect(() => {
+    if (messages.length > 0 && messages[0].id === "1") {
+      // Check if message is default (id "1")
+      const defaultFr = "Bonjour ! Comment puis-je vous accompagner aujourd'hui ?";
+      const defaultEn = "Hello! How can I assist you today?";
+
+      const newText = currentLanguage === "en" ? defaultEn : defaultFr;
+
+      if (messages[0].text !== newText) {
+        const updated = [...messages];
+        updated[0] = { ...updated[0], text: newText };
+        setMessages(updated);
+      }
+    }
+  }, [currentLanguage, messages, setMessages]);
 
   const handleMicPress = () => {
     if (isListening) {
@@ -109,10 +172,12 @@ export default function AssistantScreen() {
     }
   };
 
+  const insets = useSafeAreaInsets(); // Hook for safe area
+
   return (
     <View style={styles.container}>
       {/* CUSTOM HEADER (INA Style) */}
-      <View style={[styles.header, { paddingTop: IS_LARGE_SCREEN ? 60 : 50 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 10, height: 60 + insets.top }]}>
         <TouchableOpacity onPress={() => setCurrentScreen("dashboard")} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color="#F97316" />
         </TouchableOpacity>
@@ -124,8 +189,12 @@ export default function AssistantScreen() {
           <View style={styles.headerInfo}>
             <Text style={styles.headerName}>{t("assistantName")}</Text>
             <View style={styles.statusRow}>
-              <View style={styles.statusDot} />
-              <Text style={styles.statusText}>{t("online")}</Text>
+              <View style={[styles.statusDot, { backgroundColor: netInfo.isConnected === false ? "#EF4444" : "#10B981" }]} />
+              <Text style={styles.statusText}>
+                {netInfo.isConnected === false
+                  ? (currentLanguage === "en" ? "Offline" : "Hors ligne")
+                  : t("online")}
+              </Text>
             </View>
           </View>
         </View>
@@ -157,18 +226,45 @@ export default function AssistantScreen() {
                     </View>
                   )}
 
-                  <View style={[
-                    styles.bubble,
-                    isUser ? styles.bubbleUser : styles.bubbleAssistant
-                  ]}>
-                    <Text style={[
-                      styles.messageText,
-                      isUser ? styles.textUser : styles.textAssistant
+                  <View style={{ alignItems: isUser ? 'flex-end' : 'flex-start', maxWidth: "85%" }}>
+                    <View style={[
+                      styles.bubble,
+                      isUser ? styles.bubbleUser : styles.bubbleAssistant
                     ]}>
-                      {msg.text}
-                    </Text>
-                    {msg.text.includes("?") && !isUser && (
-                      <Feather name="volume-2" size={16} color="#9CA3AF" style={{ marginTop: 8 }} />
+                      <Text style={[
+                        styles.messageText,
+                        isUser ? styles.textUser : styles.textAssistant
+                      ]}>
+                        {msg.text}
+                      </Text>
+                      {msg.text.includes("?") && !isUser && (
+                        <Feather name="volume-2" size={16} color="#9CA3AF" style={{ marginTop: 8 }} />
+                      )}
+                    </View>
+
+                    {/* Render Actions if present */}
+                    {msg.actions && msg.actions.length > 0 && (
+                      <View style={styles.actionsContainer}>
+                        {msg.actions.map((action, index) => (
+                          <TouchableOpacity
+                            key={index}
+                            style={[
+                              styles.actionButton,
+                              action.style === 'secondary' ? styles.actionButtonSecondary : styles.actionButtonPrimary
+                            ]}
+                            onPress={() => handleActionPress(action.action, msg.id)}
+                          >
+                            {action.style === 'primary' && <Feather name="user" size={16} color="white" style={{ marginRight: 6 }} />}
+                            {action.style === 'secondary' && <Feather name="message-circle" size={16} color="#6B7280" style={{ marginRight: 6 }} />}
+                            <Text style={[
+                              styles.actionButtonText,
+                              action.style === 'secondary' ? styles.actionButtonTextSecondary : styles.actionButtonTextPrimary
+                            ]}>
+                              {action.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
                     )}
                   </View>
 
@@ -221,8 +317,12 @@ export default function AssistantScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
-            <Feather name="send" size={20} color="white" />
+          <TouchableOpacity
+            style={[styles.sendButton, (!inputText.trim() && !isListening) && styles.sendButtonDisabled]}
+            onPress={handleSend}
+            disabled={!inputText.trim() && !isListening}
+          >
+            <Feather name="send" size={24} color="white" />
           </TouchableOpacity>
         </View>
 
@@ -380,16 +480,56 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendButton: {
+    backgroundColor: "#22C55E",
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#F97316",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#F97316",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
+    backgroundColor: "#9CA3AF"
+  },
+  actionsContainer: {
+    marginTop: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  actionButtonPrimary: {
+    backgroundColor: "#F97316",
+  },
+  actionButtonSecondary: {
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  actionButtonTextPrimary: {
+    color: "white",
+  },
+  actionButtonTextSecondary: {
+    color: "#374151",
   },
 });
