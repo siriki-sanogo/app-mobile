@@ -62,6 +62,61 @@ export const translations = {
         stressed: "Stressé",
         sad: "Triste",
         angry: "En colère",
+        // Side Menu
+        menu_home: "Accueil",
+        menu_assistant: "Assistant",
+        menu_history: "Historique",
+        menu_exercises: "Exercices",
+        menu_progress: "Progrès",
+        menu_profile: "Profil",
+        menu_settings: "Paramètres",
+        menu_help: "Aide & Support",
+        menu_sources: "Sources et Références",
+        menu_privacy: "Confidentialité",
+        menu_darkmode: "Mode sombre",
+        menu_logout: "Déconnexion",
+        menu_hello: "Bonjour",
+
+        // Exercises
+        exercises_title: "Exercices",
+        exercises_subtitle: "Bibliothèque de pratiques",
+
+        // History
+        history_empty_title: "Aucune interaction",
+        history_empty_subtitle: "Commencez à parler avec l'assistant pour voir votre historique",
+        view_conversation: "Voir la conversation",
+
+        // Progress
+        progress_title: "Vos Progrès",
+        progress_subtitle: "Suivez votre évolution",
+        streak_label: "Jours consécutifs",
+        streak_sub: "Continuez comme ça !",
+        mood_history: "Humeur (7 derniers jours)",
+        wellness_week: "Bien-être cette semaine",
+        wellness_improvement: "Amélioration",
+        badges_title: "Succès & Badges",
+        badge_first_step: "Premier pas",
+        badge_3_zen: "3 Jours Zen",
+        badge_7_streak: "7 Jours Série",
+        badge_master: "Maître Zen",
+
+        // New Features
+        garden_title: "Mon Jardin de Sérénité",
+        insights_title: "Bilan Émotionnel",
+        insights_subtitle: "Comprenez vos tendances",
+        score_label: "Score Bien-être",
+        advice_title: "Conseil IA",
+        stat_sessions: "Sessions Totales",
+        stat_mood: "Humeur Dominante",
+        menu_insights: "Bilan Émotionnel",
+        garden_stage_1: "Graine",
+        garden_stage_2: "Jeune Pousse",
+        garden_stage_3: "Arbuste",
+        garden_stage_4: "Grand Arbre",
+        garden_keep_going: "Continuez vos efforts pour faire grandir votre jardin !",
+        level: "Niveau",
+        insight_excellent: "Excellent ! Vous maintenez un bon équilibre.",
+        insight_fluctuation: "Quelques fluctuations, prenez du temps pour vous.",
     },
     en: {
         // General
@@ -97,6 +152,21 @@ export const translations = {
         enterName: "Enter your name",
         photoLibrary: "Choose a Photo",
 
+        // Profile & Settings
+        settingsTitle: "Settings",
+        manageAccount: "Manage your account & preferences",
+        section_profile: "PROFILE",
+        section_general: "GENERAL",
+        section_security: "SECURITY",
+        section_content: "CONTENT",
+        section_support: "SUPPORT",
+        notifications: "Notifications",
+        face_id: "Face ID / Touch ID",
+        help_support: "Help & Support",
+        privacy_policy: "Privacy Policy",
+        delete_account: "Delete my account",
+        version: "Version",
+
         // Assistant
         assistantName: "GOOD APP",
         online: "Online",
@@ -126,6 +196,61 @@ export const translations = {
         stressed: "Stressed",
         sad: "Sad",
         angry: "Angry",
+
+        // Side Menu
+        menu_home: "Home",
+        menu_assistant: "Assistant",
+        menu_history: "History",
+        menu_exercises: "Exercises",
+        menu_progress: "Progress",
+        menu_profile: "Profile",
+        menu_settings: "Settings",
+        menu_help: "Help & Support",
+        menu_sources: "Sources & References",
+        menu_privacy: "Privacy",
+        menu_darkmode: "Dark Mode",
+        menu_logout: "Logout",
+        menu_hello: "Hello",
+        menu_insights: "Emotional Insights",
+
+        // Exercises
+        exercises_title: "Exercises",
+        exercises_subtitle: "Library of practices",
+
+        // History
+        history_empty_title: "No interactions",
+        history_empty_subtitle: "Start talking with the assistant to see your history",
+        view_conversation: "View conversation",
+
+        // Progress
+        progress_title: "Your Progress",
+        progress_subtitle: "Track your evolution",
+        streak_label: "Consecutive Days",
+        streak_sub: "Keep it up!",
+        mood_history: "Mood (Last 7 days)",
+        wellness_week: "Wellness this week",
+        wellness_improvement: "Improvement",
+        badges_title: "Success & Badges",
+        badge_first_step: "First Step",
+        badge_3_zen: "3 Days Zen",
+        badge_7_streak: "7 Days Streak",
+        badge_master: "Zen Master",
+
+        // New Features
+        garden_title: "My Serenity Garden",
+        insights_title: "Emotional Insights",
+        insights_subtitle: "Understand your patterns",
+        score_label: "Wellness Score",
+        advice_title: "AI Advice",
+        stat_sessions: "Total Sessions",
+        stat_mood: "Dominant Mood",
+        garden_stage_3: "Plant",
+        garden_stage_4: "Tree",
+        garden_keep_going: "Keep going to grow your garden!",
+
+        // Dates & Progress
+        day_prefix: "D",
+        date_format: "en-US",
     }
 };
 

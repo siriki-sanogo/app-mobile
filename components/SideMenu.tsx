@@ -12,6 +12,7 @@ import {
   useColorScheme,
 } from "react-native";
 import { useAppContext } from "../contexte/AppContext";
+import { useTranslation } from "../contexte/i18n";
 
 const windowWidth = Dimensions.get("window").width;
 const MENU_WIDTH = Math.min(340, windowWidth * 0.78);
@@ -25,6 +26,7 @@ type Props = {
 
 export default function SideMenu({ visible, onClose, currentScreen, setCurrentScreen }: Props) {
   const { profile } = useAppContext();
+  const t = useTranslation(profile?.language || "fr");
   const translateX = useRef(new Animated.Value(-MENU_WIDTH)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const colorScheme = useColorScheme();
@@ -46,18 +48,20 @@ export default function SideMenu({ visible, onClose, currentScreen, setCurrentSc
   }, [visible, translateX, overlayOpacity]);
 
   const items = [
-    { id: "home", target: "dashboard", label: "Accueil", icon: "home" },
-    { id: "assistant", target: "assistant", label: "Assistant", icon: "message-square" },
-    { id: "exercises", target: "exercises", label: "Exercices", icon: "book" },
-    { id: "progress", target: "progress", label: "Progrès", icon: "bar-chart" },
-    { id: "profile", target: "profile", label: "Profil", icon: "user" },
+    { id: "home", target: "dashboard", label: t("menu_home"), icon: "home" },
+    { id: "assistant", target: "assistant", label: t("menu_assistant"), icon: "message-square" },
+    { id: "history", target: "history", label: t("menu_history"), icon: "clock" },
+    { id: "exercises", target: "exercises", label: t("menu_exercises"), icon: "book" },
+    { id: "progress", target: "progress", label: t("menu_progress"), icon: "bar-chart" },
+    { id: "insights", target: "insights", label: t("menu_insights"), icon: "pie-chart" },
+    { id: "profile", target: "profile", label: t("menu_profile"), icon: "user" },
   ];
 
   const bottomItems = [
-    { id: "settings", label: "Paramètres", icon: "settings" },
-    { id: "help", label: "Aide & Support", icon: "help-circle" },
-    { id: "sources", label: "Sources et Références", icon: "file-text" },
-    { id: "privacy", label: "Confidentialité", icon: "shield" },
+    { id: "settings", label: t("menu_settings"), icon: "settings" },
+    { id: "help", label: t("menu_help"), icon: "help-circle" },
+    { id: "sources", label: t("menu_sources"), icon: "file-text" },
+    { id: "privacy", label: t("menu_privacy"), icon: "shield" },
   ];
 
   return (
@@ -75,7 +79,7 @@ export default function SideMenu({ visible, onClose, currentScreen, setCurrentSc
             <View style={styles.avatar}><Text style={styles.avatarText}>{userName.charAt(0).toUpperCase()}</Text></View>
             <View style={{ marginLeft: 12 }}>
               <Text style={[styles.profileName, darkMode ? { color: "#E6EEF8" } : {}]}>{userName}</Text>
-              <Text style={[styles.profileEmail, darkMode ? { color: "#9CA3AF" } : {}]}>Bonjour 👋</Text>
+              <Text style={[styles.profileEmail, darkMode ? { color: "#9CA3AF" } : {}]}>{t("menu_hello")} 👋</Text>
             </View>
           </View>
 
@@ -126,9 +130,9 @@ export default function SideMenu({ visible, onClose, currentScreen, setCurrentSc
         <View style={styles.bottomRow}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Feather name="moon" size={18} color="#6B7280" />
-            <Text style={[styles.itemLabel, { marginLeft: 10 }]}>Mode sombre</Text>
+            <Text style={[styles.itemLabel, { marginLeft: 10 }]}>{t("menu_darkmode")}</Text>
           </View>
-          <Switch value={darkMode} onValueChange={() => {}} />
+          <Switch value={darkMode} onValueChange={() => { }} />
         </View>
       </Animated.View>
     </>

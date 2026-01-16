@@ -3,6 +3,7 @@ import React from "react";
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from "react-native";
 import ExerciseList from "../components/ExerciseList";
 import { useAppContext } from "../contexte/AppContext";
+import { useTranslation } from "../contexte/i18n";
 
 const { width } = Dimensions.get("window");
 const IS_LARGE_SCREEN = width >= 768;
@@ -10,7 +11,8 @@ const IS_LARGE_SCREEN = width >= 768;
 export default function ExercisesScreen() {
   const colorScheme = useColorScheme();
   const darkMode = colorScheme === "dark";
-  const { setCurrentScreen } = useAppContext();
+  const { setCurrentScreen, profile } = useAppContext();
+  const t = useTranslation(profile?.language || "fr");
 
   return (
     <View style={[styles.container, darkMode ? { backgroundColor: "#071025" } : {}]}>
@@ -21,8 +23,8 @@ export default function ExercisesScreen() {
         </TouchableOpacity>
 
         <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={styles.headerTitle}>Exercices</Text>
-          <Text style={styles.headerSubtitle}>Bibliothèque de pratiques</Text>
+          <Text style={styles.headerTitle}>{t("exercises_title")}</Text>
+          <Text style={styles.headerSubtitle}>{t("exercises_subtitle")}</Text>
         </View>
 
         {/* Placeholder for symmetry or search icon */}
