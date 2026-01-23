@@ -15,7 +15,9 @@ assetsToAdd.forEach(ext => {
     }
 });
 
-// 2. Source - S'assurer que wasm n'est pas traité comme du code source
-resolver.sourceExts = resolver.sourceExts.filter(ext => ext !== 'wasm');
+// 2. Source - S'assurer que mjs est supporté (utilisé par certains workers)
+if (!resolver.sourceExts.includes('mjs')) {
+    resolver.sourceExts.push('mjs');
+}
 
 module.exports = config;

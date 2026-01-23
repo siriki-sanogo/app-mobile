@@ -22,41 +22,51 @@ export default function SuggestionCard({
             style={[
                 styles.card,
                 darkMode
-                    ? { backgroundColor: "#1F2937", borderColor: "#374151" }
-                    : { backgroundColor: "white", borderColor: "#E5E7EB" },
+                    ? { backgroundColor: "rgba(31, 41, 55, 0.4)", borderColor: "rgba(55, 65, 81, 0.5)" }
+                    : { backgroundColor: "rgba(255, 255, 255, 0.6)", borderColor: "rgba(255, 255, 255, 0.8)" },
             ]}
             onPress={onPress}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
         >
             <View style={styles.cardContent}>
-                <Text style={styles.cardEmoji}>{emoji}</Text>
+                <View style={[
+                    styles.emojiContainer,
+                    darkMode ? { backgroundColor: "#374151" } : { backgroundColor: "#F3F4F6" }
+                ]}>
+                    <Text style={styles.cardEmoji}>{emoji}</Text>
+                </View>
                 <View style={styles.cardText}>
                     <Text
+                        numberOfLines={2}
                         style={[
                             styles.cardTitle,
-                            darkMode ? { color: "#E5E7EB" } : { color: "#1F2937" },
+                            darkMode ? { color: "#F9FAFB" } : { color: "#111827" },
                         ]}
                     >
                         {title}
                     </Text>
-                    <Text
-                        style={[
-                            styles.cardSource,
-                            darkMode ? { color: "#9CA3AF" } : { color: "#6B7280" },
-                        ]}
-                    >
-                        {source === "bible"
-                            ? "📖 Bible"
-                            : source === "coran"
-                                ? "📚 Coran"
-                                : "🌍 Textes africains"}
-                    </Text>
+                    <View style={styles.sourceTag}>
+                        <Text
+                            style={[
+                                styles.cardSource,
+                                darkMode ? { color: "#9CA3AF" } : { color: "#4B5563" },
+                            ]}
+                        >
+                            {source === "bible"
+                                ? "📖 Bible"
+                                : source === "coran"
+                                    ? "📚 Coran"
+                                    : "🌍 Textes africains"}
+                        </Text>
+                    </View>
                 </View>
-                <Feather
-                    name="chevron-right"
-                    size={20}
-                    color={darkMode ? "#6B7280" : "#9CA3AF"}
-                />
+                <View style={styles.chevronContainer}>
+                    <Feather
+                        name="arrow-right"
+                        size={18}
+                        color={darkMode ? "#3B82F6" : "#2563EB"}
+                    />
+                </View>
             </View>
         </TouchableOpacity>
     );
@@ -64,32 +74,54 @@ export default function SuggestionCard({
 
 const styles = StyleSheet.create({
     card: {
-        padding: 16,
-        borderRadius: 12,
+        padding: 14,
+        borderRadius: 20,
         borderWidth: 1,
-        borderColor: "#E5E7EB",
-        marginBottom: 12,
-        backgroundColor: "white",
+        marginBottom: 14,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
     },
     cardContent: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 12,
+        gap: 14,
+    },
+    emojiContainer: {
+        width: 52,
+        height: 52,
+        borderRadius: 14,
+        justifyContent: "center",
+        alignItems: "center",
     },
     cardEmoji: {
-        fontSize: 28,
+        fontSize: 26,
     },
     cardText: {
         flex: 1,
     },
     cardTitle: {
-        fontWeight: "600",
-        fontSize: 14,
-        color: "#1F2937",
+        fontWeight: "700",
+        fontSize: 15,
+        lineHeight: 20,
         marginBottom: 4,
+    },
+    sourceTag: {
+        flexDirection: "row",
+        alignItems: "center",
     },
     cardSource: {
         fontSize: 12,
-        color: "#6B7280",
+        fontWeight: "600",
     },
+    chevronContainer: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: "rgba(59, 130, 246, 0.1)",
+        justifyContent: "center",
+        alignItems: "center",
+    }
 });

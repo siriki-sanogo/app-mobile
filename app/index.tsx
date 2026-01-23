@@ -13,6 +13,11 @@ import ProfileScreen from "./profile";
 import ProgressScreen from "./progress";
 import RegisterScreen from "./register";
 import WelcomeScreen from "./welcome";
+import InsightsScreen from "./insights";
+import SettingsScreen from "./settings";
+import HelpScreen from "./help";
+import SourcesScreen from "./sources";
+import PrivacyScreen from "./privacy";
 
 // Bottom navigation removed as requested (no buttons at bottom)
 
@@ -37,16 +42,23 @@ export default function HomeScreen() {
   const screenToRender = currentScreen || "dashboard";
 
   // Screens that handle their own headers
-  // Added "progress" to this list to fix double header issue
-  const HAS_CUSTOM_HEADER = ["onboarding", "assistant", "profile", "exercises", "progress"];
+  const HAS_CUSTOM_HEADER = [
+    "onboarding", "assistant", "profile", "exercises", "progress",
+    "insights", "settings", "help", "sources", "privacy"
+  ];
   const showGenericHeader = !HAS_CUSTOM_HEADER.includes(screenToRender);
 
   const SCREEN_TITLES: Record<string, string> = {
-    dashboard: "Dispositif",
+    dashboard: "Good App",
     history: "Historique",
+    insights: "Bilan Émotionnel",
+    settings: "Paramètres",
+    help: "Aide & Support",
+    sources: "Sources et Références",
+    privacy: "Confidentialité",
   };
 
-  const currentTitle = SCREEN_TITLES[screenToRender] || "Dispositif";
+  const currentTitle = SCREEN_TITLES[screenToRender] || "Good App";
 
   return (
     <View style={styles.container}>
@@ -76,6 +88,11 @@ export default function HomeScreen() {
       {screenToRender === "exercises" && <ExercisesScreen />}
       {screenToRender === "progress" && <ProgressScreen />}
       {screenToRender === "profile" && <ProfileScreen />}
+      {screenToRender === "insights" && <InsightsScreen />}
+      {screenToRender === "settings" && <SettingsScreen />}
+      {screenToRender === "help" && <HelpScreen />}
+      {screenToRender === "sources" && <SourcesScreen />}
+      {screenToRender === "privacy" && <PrivacyScreen />}
 
       {/* Side menu */}
       <SideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} currentScreen={screenToRender} setCurrentScreen={(s) => { setCurrentScreen(s); setMenuOpen(false); }} />

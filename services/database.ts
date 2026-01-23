@@ -4,7 +4,7 @@ import * as FileSystem from "expo-file-system";
 import { Platform } from "react-native";
 
 // Nom de la base de données
-const DB_NAME = "mobile_content.db";
+const DB_NAME = "mobile_content_v2.db";
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -13,7 +13,18 @@ export const getDB = async () => {
   try {
     db = await SQLite.openDatabaseAsync(DB_NAME);
   } catch (e) {
-    console.error("Failed to open DB:", e);
+    console.error("Failed to open SQLite database:", e);
+    if (Platform.OS === 'web') {
+      console.warn("Falling back to a mock database for web demonstration.");
+      // @ts-ignore - Mock minimal for avoidance of crash
+      return {
+        execAsync: async () => { },
+        getFirstAsync: async () => null,
+        getAllAsync: async () => [],
+        runAsync: async () => { },
+        withTransactionAsync: async (cb: any) => await cb()
+      };
+    }
     throw e;
   }
   return db;
@@ -52,7 +63,11 @@ export const initDatabase = async () => {
             to: dbPath,
           });
           console.log("Database copied successfully to", dbPath);
+        } else {
+          console.error("Asset URI is null, cannot copy database");
         }
+      } else {
+        console.log("Database already exists at", dbPath);
       }
     }
 
@@ -190,6 +205,7 @@ export const getSurahVerses = async (surahNumber: number) => {
 
 export const searchReligiousTexts = async (query: string) => {
   const database = await getDB();
+  // Simple keyword search for MVP RAG
   return await database.getAllAsync(
     "SELECT * FROM religious_texts WHERE content LIKE ? LIMIT 5",
     [`%${query}%`]
@@ -225,4 +241,24 @@ export const loadMessages = async (sessionId: string) => {
     "SELECT * FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC",
     [sessionId]
   );
+};
+
+export const createSession = async (session: any) => {
+  const db = await getDB();
+  await db.runAsync(
+    "INSERT OR IGNORE INTO chat_sessions (id, title, created_at) VALUES (?, ?, ?)",
+    [session.id, session.title, session.created_at]
+  );
+};
+
+export const getSessions = async () => {
+  const db = await getDB();
+  // Join with messages to get the last message as a "question" snippet
+  return await db.getAllAsync(`
+    SELECT s.*, m.content as last_message 
+    FROM chat_sessions s
+    LEFT JOIN chat_messages m ON m.session_id = s.id
+    GROUP BY s.id
+    ORDER BY s.created_at DESC
+  `);
 };

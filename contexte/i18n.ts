@@ -1,3 +1,5 @@
+import { useAppContext } from "./AppContext";
+
 export const translations = {
     fr: {
         // General
@@ -8,10 +10,9 @@ export const translations = {
         noContent: "Aucun contenu selon tes préférences",
 
         // Onboarding
-        language: "Langue",
-        age: "Tranche d'âge",
         religion: "Religion",
         objectives: "Objectifs",
+        language_label: "Langue",
         books: "Livres",
         next: "Suivant",
         start: "Commencer",
@@ -32,6 +33,22 @@ export const translations = {
         profileIncomplete: "Profil non complété",
         enterName: "Entrez votre nom",
         photoLibrary: "Choisir une photo",
+
+        // Profile & Settings
+        settingsTitle: "Paramètres",
+        manageAccount: "Gérez votre compte et vos préférences",
+        section_profile: "PROFIL",
+        section_general: "GÉNÉRAL",
+        section_security: "SÉCURITÉ",
+        section_content: "CONTENU",
+        section_support: "SUPPORT",
+        notifications: "Notifications",
+        face_id: "Face ID / Touch ID",
+        help_support: "Aide & Support",
+        privacy_policy: "Politique de confidentialité",
+        delete_account: "Supprimer mon compte",
+        version: "Version",
+        language: "Langue",
 
         // Assistant
         assistantName: "GOOD APP",
@@ -117,6 +134,18 @@ export const translations = {
         level: "Niveau",
         insight_excellent: "Excellent ! Vous maintenez un bon équilibre.",
         insight_fluctuation: "Quelques fluctuations, prenez du temps pour vous.",
+        date_format: "fr-FR",
+        day_prefix: "J",
+
+        // Universal Search
+        search_title: "Recherches de Référence",
+        search_placeholder: "Rechercher (Bible, Coran, Textes...)",
+        source_fr: "Français",
+        source_enfr: "Anglais-Fr",
+        source_en: "Anglais",
+        source_quran: "Coran",
+        source_bible: "Bible",
+        source_african: "Textes africains",
     },
     en: {
         // General
@@ -127,7 +156,7 @@ export const translations = {
         noContent: "No content matching your preferences",
 
         // Onboarding
-        language: "Language",
+        language_label: "Language", // Corrected from 'language'
         age: "Age Range",
         religion: "Religion",
         objectives: "Objectives",
@@ -166,6 +195,7 @@ export const translations = {
         privacy_policy: "Privacy Policy",
         delete_account: "Delete my account",
         version: "Version",
+        language: "Language", // Added missing key
 
         // Assistant
         assistantName: "GOOD APP",
@@ -244,22 +274,37 @@ export const translations = {
         advice_title: "AI Advice",
         stat_sessions: "Total Sessions",
         stat_mood: "Dominant Mood",
+        garden_stage_1: "Seed",
+        garden_stage_2: "Sprout",
         garden_stage_3: "Plant",
         garden_stage_4: "Tree",
         garden_keep_going: "Keep going to grow your garden!",
+        level: "Level",
+        insight_excellent: "Excellent! You maintain a good balance.",
+        insight_fluctuation: "Some fluctuations, take time for yourself.",
 
         // Dates & Progress
         day_prefix: "D",
         date_format: "en-US",
+
+        // Universal Search
+        search_title: "Reference Search",
+        search_placeholder: "Search (Bible, Quran, Texts...)",
+        source_fr: "French",
+        source_enfr: "English-French",
+        source_en: "English",
+        source_quran: "Quran",
+        source_bible: "Bible",
+        source_african: "African Texts",
     }
 };
 
 export type Language = "fr" | "en";
 export type TranslationKey = keyof typeof translations.fr;
 
-export function useTranslation(lang: Language) {
-    return (key: string) => {
+export function useTranslation(lang: Language): (key: TranslationKey) => string {
+    return (key: TranslationKey) => {
         const translationsForLang = translations[lang];
-        return translationsForLang[key as keyof typeof translationsForLang] || key;
+        return translationsForLang[key] || key;
     };
 }

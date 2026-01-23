@@ -2,25 +2,19 @@ import { Platform } from "react-native";
 
 // === CONFIGURATION RESEAU ===
 
-// 1. Android Emulator : 10.0.2.2 corresponds à localhost
-// 2. iOS Simulator : localhost fonctionne
-// 3. Expo Go (Physique) : Vous devez utiliser l'IP locale de votre ordinateur.
-//    D'après votre ipconfig, votre IP est : 192.168.241.83
-//    Si cela change, remplacez cette valeur.
+// 1. CHERCHEZ VOTRE IP : Tapez 'ipconfig' et cherchez "Adresse IPv4" (ex: 192.168.1.15)
+// 2. OU UTILISEZ NGROK : Lancez 'ngrok http 8000' et copiez l'URL https
 
-// Choisissez l'IP en fonction de votre mode de test :
-const SERVER_IP = "192.168.241.83"; // <--- Mettre VOTRE IP locale ici pour Expo Go
+const USE_NGROK = true; // <--- Mettez à 'true' si vous utilisez Ngrok
+const NGROK_URL = "https://4a0c43cbf0ac.ngrok-free.app";
+const LOCAL_IP = "192.168.1.15"; // <--- Votre IP locale ici
 
-const HOST = Platform.select({
-    android: "10.0.2.2", // Utiliser SERVER_IP si vous testez sur un vrai téléphone Android
-    ios: "localhost",    // Utiliser SERVER_IP si vous testez sur un vrai iPhone
-    default: "localhost",
-});
+const API_HOST = USE_NGROK ? NGROK_URL.replace("https://", "") : LOCAL_IP;
 
-// Pour forcer l'utilisation de l'IP locale (recommandé pour Expo Go) :
-// Décommentez la ligne ci-dessous :
-const API_HOST = SERVER_IP;
-// const API_HOST = HOST;
+export const API_URL = USE_NGROK
+    ? `${NGROK_URL}/api/v1`
+    : `http://${LOCAL_IP}:8000/api/v1`;
 
-export const API_URL = `http://${API_HOST}:8000/api/v1`;
-export const BASE_URL = `http://${API_HOST}:8000`;
+export const BASE_URL = USE_NGROK
+    ? NGROK_URL
+    : `http://${LOCAL_IP}:8000`;

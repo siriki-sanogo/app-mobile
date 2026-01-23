@@ -23,25 +23,30 @@ export default function MoodButton({
             style={[
                 styles.moodButton,
                 darkMode
-                    ? { backgroundColor: "#1F2937", borderColor: "#374151" }
-                    : { backgroundColor: "white", borderColor: "#E5E7EB" },
+                    ? { backgroundColor: "rgba(31, 41, 55, 0.4)", borderColor: "rgba(55, 65, 81, 0.5)" }
+                    : { backgroundColor: "rgba(255, 255, 255, 0.7)", borderColor: "rgba(255, 255, 255, 0.8)" },
                 isSelected && {
                     backgroundColor: color,
                     borderColor: color,
+                    transform: [{ scale: 1.05 }],
+                    elevation: 8,
+                    shadowColor: color,
+                    shadowOpacity: 0.4,
+                    shadowRadius: 10,
                 },
             ]}
             onPress={onPress}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
         >
-            <Text style={styles.moodEmoji}>{emoji}</Text>
+            <Text style={[styles.moodEmoji, isSelected && { transform: [{ scale: 1.2 }] }]}>{emoji}</Text>
             <Text
                 style={[
                     styles.moodLabel,
                     isSelected
-                        ? { color: "white", fontWeight: "600" }
+                        ? { color: "white", fontWeight: "800" }
                         : darkMode
                             ? { color: "#D1D5DB" }
-                            : { color: "#6B7280" },
+                            : { color: "#4B5563" },
                 ]}
             >
                 {label}
@@ -53,21 +58,26 @@ export default function MoodButton({
 const styles = StyleSheet.create({
     moodButton: {
         alignItems: "center",
+        justifyContent: "center",
         paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderRadius: 12,
-        borderWidth: 2,
-        marginRight: 12,
-        backgroundColor: "white",
-        borderColor: "#E5E7EB",
+        paddingVertical: 14,
+        borderRadius: 20,
+        borderWidth: 1.5,
+        marginRight: 14,
+        minWidth: 85,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 3,
     },
     moodEmoji: {
-        fontSize: 24,
-        marginBottom: 6,
+        fontSize: 28,
+        marginBottom: 8,
     },
     moodLabel: {
-        fontSize: 12,
-        fontWeight: "500",
-        color: "#6B7280",
+        fontSize: 13,
+        fontWeight: "700",
+        letterSpacing: 0.2,
     },
 });

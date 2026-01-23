@@ -9,21 +9,28 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    useColorScheme
+    useColorScheme,
+    Linking
 } from "react-native";
+import { useAppContext } from "../contexte/AppContext";
+import { useTranslation } from "../contexte/i18n";
 import { searchOnline } from "../services/api";
 import { searchTexts } from "../services/database";
 
 const SEARCH_SOURCES = [
-    { id: "larousse_fr", label: "Français", url: "https://www.larousse.fr/dictionnaires/francais/" },
-    { id: "wordreference_enfr", label: "Anglais-Fr", url: "https://www.wordreference.com/enfr/" },
-    { id: "cambridge_en", label: "Anglais", url: "https://dictionary.cambridge.org/dictionary/english/" },
-    { id: "quran", label: "Coran", url: "https://quran.com/search?q=" },
-    { id: "bible", label: "Bible", url: "https://www.biblegateway.com/quicksearch/?quicksearch=" },
-    { id: "gutenberg", label: "W.E.B. Dubois", url: "https://www.gutenberg.org/ebooks/search/?query=Du+Bois%2C+W.+E.+B." },
+    { id: "larousse_fr", labelKey: "source_fr", url: "https://www.larousse.fr/dictionnaires/francais/" },
+    { id: "wordreference_enfr", labelKey: "source_enfr", url: "https://www.wordreference.com/enfr/" },
+    { id: "cambridge_en", labelKey: "source_en", url: "https://dictionary.cambridge.org/dictionary/english/" },
+    { id: "quran", labelKey: "source_quran", url: "https://quran.com/search?q=" },
+    { id: "bible", labelKey: "source_bible", url: "https://www.biblegateway.com/quicksearch/?quicksearch=" },
+    { id: "gutenberg", labelKey: "source_african", url: "https://www.gutenberg.org/ebooks/search/?query=Du+Bois%2C+W.+E.+B." },
 ];
 
 export default function UniversalSearch() {
+    const { profile } = useAppContext();
+    const currentLanguage = profile?.language || "fr";
+    const t = useTranslation(currentLanguage);
+
     const colorScheme = useColorScheme();
     const darkMode = colorScheme === "dark";
     const [query, setQuery] = useState("");
@@ -46,7 +53,7 @@ export default function UniversalSearch() {
                 const dbResults = await searchTexts(text, selectedCategory);
                 console.log("UniversalSearch: Local Results:", dbResults.length);
 
-                let finalResults: any[] = dbResults.map(item => ({
+                let finalResults: any[] = dbResults.map((item: any) => ({
                     id: `local-${item.id}`,
                     title: `${item.book} ${item.chapter ? `${item.chapter}:${item.verse}` : ""}`,
                     description: item.content,
@@ -70,7 +77,7 @@ export default function UniversalSearch() {
                     const apiResults = await searchOnline(text, selectedCategory);
                     console.log("Online Results:", apiResults.length);
 
-                    const formattedApi = apiResults.map((item, index) => ({
+                    const formattedApi = apiResults.map((item: any, index: number) => ({
                         id: `api-${index}`, // Temporary ID
                         title: item.title,
                         description: item.description,
@@ -94,21 +101,38 @@ export default function UniversalSearch() {
         if (item.type === "navigation" && item.route) {
             router.push(item.route);
         } else {
-            // For now, expand or copy text?
-            console.log("Pressed item:", item);
+            // Navigate to assistant and pass the text as a param or via context
+            // For simplicity, we'll try to use the router and maybe the assistant will pick it up
+            console.log("Navigating to assistant with:", item.description);
+            router.push({
+                pathname: "/assistant",
+                params: { initialMessage: item.description }
+            } as any);
+        }
+    };
+
+    const handleSourcePress = async (source: typeof SEARCH_SOURCES[0]) => {
+        setSelectedSourceId(source.id);
+        if (!query) {
+            // If no search query, open the external link directly
+            const url = source.url;
+            const supported = await Linking.canOpenURL(url);
+            if (supported) {
+                await Linking.openURL(url);
+            }
         }
     };
 
     return (
         <View style={styles.container}>
-            <Text style={[styles.title, darkMode ? { color: "#E5E7EB" } : { color: "#1F2937" }]}>Recherches de Référence</Text>
+            <Text style={[styles.title, darkMode ? { color: "#E5E7EB" } : { color: "#1F2937" }]}>{t("search_title")}</Text>
 
             {/* Tabs (Sources/Categories) */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
-                {SEARCH_SOURCES.map((source) => (
+                {SEARCH_SOURCES.map((source: any) => (
                     <TouchableOpacity
                         key={source.id}
-                        onPress={() => setSelectedSourceId(source.id)} // Or use as category filter
+                        onPress={() => handleSourcePress(source)}
                         style={[
                             styles.tab,
                             selectedSourceId === source.id
@@ -128,7 +152,7 @@ export default function UniversalSearch() {
                                         : { color: "#4B5563" },
                             ]}
                         >
-                            {source.label}
+                            {t(source.labelKey)}
                         </Text>
                     </TouchableOpacity>
                 ))}
@@ -138,7 +162,7 @@ export default function UniversalSearch() {
             <View style={[styles.inputContainer, darkMode ? { backgroundColor: "#1F2937" } : { backgroundColor: "white" }]}>
                 <TextInput
                     style={[styles.input, darkMode ? { color: "white" } : { color: "#1F2937" }]}
-                    placeholder="Rechercher (Bible, Coran, Textes...)"
+                    placeholder={t("search_placeholder")}
                     placeholderTextColor="#9CA3AF"
                     value={query}
                     onChangeText={(text) => handleSearch(text)} // Live search

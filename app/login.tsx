@@ -1,26 +1,26 @@
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as HapticFeedback from "expo-haptics";
 import React, { useState } from "react";
 import {
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  useColorScheme,
 } from "react-native";
 import { useAppContext } from "../contexte/AppContext";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 const IS_LARGE_SCREEN = width >= 768;
 
 export default function LoginScreen() {
-  const { setProfile, setCurrentScreen, setAuthScreen, login } = useAppContext();
-  const colorScheme = useColorScheme();
-  const darkMode = colorScheme === "dark";
-
+  const { setAuthScreen, login } = useAppContext();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -28,31 +28,28 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email.trim()) {
-      setError("Merci d'indiquer ton email.");
-      await HapticFeedback.notificationAsync(
-        HapticFeedback.NotificationFeedbackType.Error
-      );
+    if (!email.trim() || !email.includes("@")) {
+      setError("Veuillez entrer une adresse email valide.");
+      HapticFeedback.notificationAsync(HapticFeedback.NotificationFeedbackType.Error);
       return;
     }
     if (password.length < 4) {
-      setError("Mot de passe incorrect.");
-      await HapticFeedback.notificationAsync(
-        HapticFeedback.NotificationFeedbackType.Error
-      );
+      setError("Le mot de passe est trop court.");
+      HapticFeedback.notificationAsync(HapticFeedback.NotificationFeedbackType.Error);
       return;
     }
 
     setError("");
     setLoading(true);
-    await HapticFeedback.impactAsync(HapticFeedback.ImpactFeedbackStyle.Light);
+    HapticFeedback.impactAsync(HapticFeedback.ImpactFeedbackStyle.Medium);
 
     try {
       await login(email, password);
     } catch (err: any) {
       console.error(err);
-      const msg = err.response?.data?.detail || "Echec de connexion.";
+      const msg = err.response?.data?.detail || "Échec de connexion. Vérifiez vos identifiants.";
       setError(msg);
+      HapticFeedback.notificationAsync(HapticFeedback.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
     }
@@ -60,97 +57,128 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.mainContainer}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <StatusBar barStyle="light-content" />
+      <LinearGradient
+        colors={["#064E3B", "#065F46", "#047857"]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        {/* Header with Back Button and Logo */}
-        <View style={[styles.header, { paddingTop: IS_LARGE_SCREEN ? 60 : 50 }]}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Back Button */}
           <TouchableOpacity
             onPress={() => setAuthScreen("welcome")}
             style={styles.backButton}
           >
-            <Feather name="arrow-left" size={24} color="white" />
+            <Feather name="chevron-left" size={28} color="white" />
           </TouchableOpacity>
 
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoText}>GOOD APP</Text>
-          </View>
-        </View>
-
-        <Text style={styles.pageTitle}>Connexion</Text>
-
-        <View style={styles.content}>
-          {/* Error message */}
-          {error ? (
-            <View style={styles.errorBox}>
-              <Feather name="alert-circle" size={16} color="#EF4444" />
-              <Text style={[styles.errorText, { marginLeft: 8 }]}>{error}</Text>
-            </View>
-          ) : null}
-
-          {/* Email */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="exemple@email.com"
-              placeholderTextColor="#9CA3AF"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-
-          {/* Mot de passe */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Mot de passe</Text>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.inputWithIcon}
-                placeholder="Ton mot de passe"
-                placeholderTextColor="#9CA3AF"
-                secureTextEntry={!showPassword}
-                value={password}
-                onChangeText={setPassword}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.iconButton}
+          <View style={styles.topSection}>
+            <View style={styles.logoContainer}>
+              <LinearGradient
+                colors={["#F97316", "#FB923C"]}
+                style={styles.logoGradient}
               >
-                <Feather
-                  name={showPassword ? "eye" : "eye-off"}
-                  size={18}
-                  color="#6B7280"
-                />
-              </TouchableOpacity>
+                <Feather name="shield" size={40} color="white" />
+              </LinearGradient>
             </View>
+            <Text style={styles.brandName}>GOOD APP</Text>
+            <Text style={styles.tagline}>Votre compagnon de sérénité</Text>
           </View>
 
-          {/* Bouton de connexion */}
-          <TouchableOpacity
-            style={[styles.submitButton, loading && { opacity: 0.7 }]}
-            onPress={handleLogin}
-            activeOpacity={0.8}
-            disabled={loading}
-          >
-            <Text style={styles.submitButtonText}>{loading ? "Connexion..." : "Se connecter"}</Text>
-          </TouchableOpacity>
+          <View style={styles.formCard}>
+            <Text style={styles.welcomeText}>Bon retour !</Text>
+            <Text style={styles.subtitle}>Connectez-vous pour continuer</Text>
 
-          {/* Lien vers l'inscription */}
-          <TouchableOpacity
-            style={styles.linkContainer}
-            onPress={() => setAuthScreen("register")}
-          >
-            <Text style={styles.linkText}>
-              Pas encore de compte ? <Text style={{ fontWeight: "700", textDecorationLine: "underline" }}>S&apos;inscrire</Text>
-            </Text>
-          </TouchableOpacity>
+            {error ? (
+              <View style={styles.errorBox}>
+                <Feather name="alert-circle" size={18} color="#EF4444" />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
 
-          <View style={{ height: 40 }} />
-        </View>
-      </ScrollView>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Adresse Email</Text>
+              <View style={styles.inputWrapper}>
+                <Feather name="mail" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="nom@exemple.com"
+                  placeholderTextColor="#9CA3AF"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={styles.label}>Mot de passe</Text>
+                <TouchableOpacity onPress={() => { /* Forgot password logic */ }}>
+                  <Text style={styles.forgotText}>Oublié ?</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.inputWrapper}>
+                <Feather name="lock" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Votre mot de passe"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeIcon}
+                >
+                  <Feather
+                    name={showPassword ? "eye" : "eye-off"}
+                    size={20}
+                    color="#9CA3AF"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.loginButton, loading && styles.disabledButton]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.loginButtonText}>
+                {loading ? "Chargement..." : "Se connecter"}
+              </Text>
+              {!loading && <Feather name="arrow-right" size={20} color="white" style={{ marginLeft: 8 }} />}
+            </TouchableOpacity>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OU</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity
+              style={styles.registerLink}
+              onPress={() => setAuthScreen("register")}
+            >
+              <Text style={styles.noAccountText}>
+                Nouveau ici ? <Text style={styles.registerText}>Créer un compte</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -158,122 +186,136 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: "#065F46", // Dark Green
+    backgroundColor: "#064E3B",
   },
   scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 24,
-  },
-  header: {
-    alignItems: "center",
-    marginBottom: 20,
-    position: "relative",
-    justifyContent: "center",
-    flexDirection: "row"
+    paddingBottom: 40,
+    minHeight: height,
   },
   backButton: {
-    position: "absolute",
-    left: 16,
-    top: 0,
-    zIndex: 10,
-    padding: 8,
-  },
-  logoCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "white",
-    justifyContent: "center",
+    marginTop: Platform.OS === "ios" ? 50 : 30,
+    marginLeft: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.15)",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-    marginTop: 10,
+    justifyContent: "center",
   },
-  logoText: {
-    fontSize: 18,
+  topSection: {
+    alignItems: "center",
+    marginTop: 20,
+    marginBottom: 40,
+  },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 25,
+    overflow: "hidden",
+    marginBottom: 16,
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  logoGradient: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  brandName: {
+    fontSize: 28,
     fontWeight: "900",
-    color: "#065F46",
-    textAlign: "center",
-  },
-  pageTitle: {
-    fontSize: 22,
-    fontWeight: "700",
     color: "white",
-    textAlign: "center",
-    marginBottom: 24,
+    letterSpacing: 2,
   },
-  content: {
-    paddingHorizontal: 24,
+  tagline: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.7)",
+    marginTop: 4,
+    fontWeight: "500",
+  },
+  formCard: {
+    backgroundColor: "white",
+    marginHorizontal: 20,
+    borderRadius: 32,
+    padding: 30,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  welcomeText: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: "#6B7280",
+    marginBottom: 24,
   },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    backgroundColor: "#FEF2F2",
+    padding: 12,
     borderRadius: 12,
     marginBottom: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderWidth: 1,
-    borderColor: "#EF4444",
+    borderColor: "#FEE2E2",
   },
   errorText: {
     color: "#EF4444",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
+    marginLeft: 10,
     flex: 1,
   },
-  fieldGroup: {
+  inputGroup: {
     marginBottom: 20,
   },
   label: {
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#374151",
     marginBottom: 8,
-    color: "white",
     marginLeft: 4,
-  },
-  input: {
-    backgroundColor: "white",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: "#1F2937",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "white",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#F3F4F6",
+    height: 60,
   },
-  inputWithIcon: {
+  inputIcon: {
+    marginLeft: 16,
+  },
+  input: {
     flex: 1,
+    paddingHorizontal: 12,
     fontSize: 16,
-    paddingVertical: 14,
     color: "#1F2937",
+    fontWeight: "500",
   },
-  iconButton: {
-    padding: 8,
+  eyeIcon: {
+    padding: 16,
   },
-  submitButton: {
-    backgroundColor: "#F97316", // Orange
-    borderRadius: 99,
-    paddingVertical: 16,
+  forgotText: {
+    fontSize: 13,
+    color: "#F97316",
+    fontWeight: "700",
+  },
+  loginButton: {
+    backgroundColor: "#F97316",
+    borderRadius: 18,
+    height: 60,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     marginTop: 10,
     shadowColor: "#F97316",
     shadowOffset: { width: 0, height: 4 },
@@ -281,19 +323,39 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  submitButtonText: {
+  disabledButton: {
+    opacity: 0.7,
+  },
+  loginButtonText: {
     color: "white",
     fontSize: 18,
     fontWeight: "800",
-    letterSpacing: 0.5,
   },
-  linkContainer: {
-    marginTop: 24,
-    paddingVertical: 8,
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 25,
   },
-  linkText: {
-    color: "rgba(255, 255, 255, 0.9)",
-    textAlign: "center",
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#F3F4F6",
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#9CA3AF",
+  },
+  registerLink: {
+    alignItems: "center",
+  },
+  noAccountText: {
     fontSize: 15,
+    color: "#6B7280",
+  },
+  registerText: {
+    color: "#047857",
+    fontWeight: "800",
   },
 });

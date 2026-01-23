@@ -1,10 +1,10 @@
 import React, { createContext, ReactNode, useContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authService, UserRegisterData } from "../services/api";
-import { initDatabase, seedDatabase } from "../services/database";
+import { initDatabase, seedDatabase, getSessions } from "../services/database";
 
 export type Mood = "happy" | "calm" | "anxious" | "stressed";
-export type CurrentScreen = "onboarding" | "assistant" | "history" | "dashboard" | "exercises" | "progress" | "profile";
+export type CurrentScreen = "onboarding" | "assistant" | "history" | "dashboard" | "exercises" | "progress" | "profile" | "insights" | "settings" | "help" | "sources" | "privacy";
 export type AuthScreen = "welcome" | "register" | "login";
 
 // ... Types (UserProfile, MessageAction, Message, Session, AppContextType) ...
@@ -41,6 +41,8 @@ export interface Message {
   timestamp: string;
   helpful?: boolean | null;
   actions?: MessageAction[];
+  audioUri?: string; // [NEW] for voice notes
+  status?: "sent" | "sending" | "error"; // [NEW] for voice notes
 }
 
 export interface Session {
@@ -68,12 +70,15 @@ interface AppContextType {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   sessions: Session[];
   addSession: (session: Session) => void;
+  refreshSessions: () => Promise<void>;
   // Auth Functions
   login: (email: string, pass: string) => Promise<void>;
   register: (data: UserRegisterData) => Promise<void>;
   logout: () => Promise<void>;
   isLoading: boolean;
-  moodHistory: Mood[]; // New
+  moodHistory: { date: string; mood: Mood }[];
+  streak: number;
+  updateMood: (mood: Mood) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -98,53 +103,73 @@ export function AppProvider({ children }: { children: ReactNode }) {
       timestamp: new Date().toISOString(),
     },
   ]);
-  const [sessions, setSessions] = useState<Session[]>([
-    {
-      id: "1",
-      date: "02 Déc 2025, 14:30",
-      date_fr: "02 Déc 2025, 14:30",
-      date_en: "Dec 02, 2025, 2:30 PM",
-      mood: "calm",
-      question: "Comment gérer le stress au travail ?",
-      question_fr: "Comment gérer le stress au travail ?",
-      question_en: "How to manage stress at work?",
-      messages: [],
-    },
-    {
-      id: "2",
-      date: "01 Déc 2025, 09:15",
-      date_fr: "01 Déc 2025, 09:15",
-      date_en: "Dec 01, 2025, 9:15 AM",
-      mood: "anxious",
-      question: "J'ai du mal à dormir ces derniers temps",
-      question_fr: "J'ai du mal à dormir ces derniers temps",
-      question_en: "I have trouble sleeping lately",
-      messages: [],
-    },
-    {
-      id: "3",
-      date: "30 Nov 2025, 18:45",
-      date_fr: "30 Nov 2025, 18:45",
-      date_en: "Nov 30, 2025, 6:45 PM",
-      mood: "happy",
-      question: "Exercices de gratitude",
-      question_fr: "Exercices de gratitude",
-      question_en: "Gratitude exercises",
-      messages: [],
-    },
-    {
-      id: "4",
-      date: "29 Nov 2025, 12:00",
-      date_fr: "29 Nov 2025, 12:00",
-      date_en: "Nov 29, 2025, 12:00 PM",
-      mood: "stressed",
-      question: "Techniques de respiration",
-      question_fr: "Techniques de respiration",
-      question_en: "Breathing techniques",
-      messages: [],
-    },
-  ]);
-  const [moodHistory, setMoodHistory] = useState<Mood[]>([]); // Added missing state
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [moodHistory, setMoodHistory] = useState<{ date: string; mood: Mood }[]>([]);
+  const [streak, setStreak] = useState(0);
+
+  const calculateStreak = (history: { date: string; mood: Mood }[]) => {
+    if (history.length === 0) return 0;
+    // Simple logic: count consecutive days starting from today or yesterday
+    const dates = history.map(h => new Date(h.date).toDateString());
+    const uniqueDates = Array.from(new Set(dates)).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+    let currentStreak = 0;
+    let today = new Date();
+    let checkDate = new Date(today);
+
+    // If last activity wasn't today or yesterday, streak is 0
+    const lastDate = new Date(uniqueDates[0]);
+    const diffDays = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
+
+    if (diffDays > 1) return 0;
+
+    for (let i = 0; i < uniqueDates.length; i++) {
+      const d = new Date(uniqueDates[i]);
+      const diff = Math.floor((checkDate.getTime() - d.getTime()) / (1000 * 3600 * 24));
+      if (diff === 0) {
+        currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+    return currentStreak;
+  };
+
+  const updateMood = async (mood: Mood) => {
+    const today = new Date().toISOString();
+    const newEntry = { date: today, mood };
+    const newHistory = [newEntry, ...moodHistory].slice(0, 30); // Keep last 30
+    setMoodHistory(newHistory);
+    setStreak(calculateStreak(newHistory));
+    await AsyncStorage.setItem("mood_history", JSON.stringify(newHistory));
+  };
+
+  const refreshSessions = async () => {
+    try {
+      const dbSessions = await getSessions();
+      // Map DB sessions to the Session interface
+      const mappedSessions: Session[] = dbSessions.map((s: any) => ({
+        id: s.id,
+        date: s.created_at,
+        mood: "calm", // Default or could be extracted from messages if analyzed
+        question: s.last_message || s.title || "Conversation",
+        messages: [],
+      }));
+      setSessions(mappedSessions);
+    } catch (e) {
+      console.error("Failed to load sessions", e);
+    }
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      await initDatabase();
+      await seedDatabase();
+      await refreshSessions();
+    };
+    init();
+  }, []);
 
   // Initial Check for Token
   useEffect(() => {
@@ -171,6 +196,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await AsyncStorage.removeItem("user_token");
       }
     };
+    const loadData = async () => {
+      try {
+        const savedMoods = await AsyncStorage.getItem("mood_history");
+        if (savedMoods) {
+          const history = JSON.parse(savedMoods);
+          setMoodHistory(history);
+          setStreak(calculateStreak(history));
+        }
+      } catch (e) {
+        console.error("Failed to load mood history", e);
+      }
+    };
+    loadData();
     checkAuth();
   }, []);
 
@@ -237,11 +275,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setMessages,
         sessions,
         addSession,
+        refreshSessions,
         login,
         register,
         logout,
         isLoading,
-        moodHistory, // Added to value
+        moodHistory,
+        streak,
+        updateMood,
       }}
     >
       {children}

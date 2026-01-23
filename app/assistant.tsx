@@ -14,16 +14,18 @@ import {
   View,
   useColorScheme
 } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 
 import { useAppContext } from "../contexte/AppContext";
 import { useTranslation } from "../contexte/i18n";
 import { createSession, saveMessage } from "../services/database";
 
 import { useNetInfo } from "@react-native-community/netinfo";
-import { useSafeAreaInsets } from "react-native-safe-area-context"; // [NEW] Safe Area
-import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
-import { fetchAIResponse } from "../services/api"; // [NEW]
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useVoiceRecording } from "../hooks/useVoiceRecording";
+import { fetchAIResponse, audioService } from "../services/api";
 import { generateOfflineResponse } from "../utils/offlineAI";
+import VoicePlayer from "../components/VoicePlayer";
 
 const { width } = Dimensions.get("window");
 const IS_LARGE_SCREEN = width >= 768;
@@ -39,23 +41,18 @@ export default function AssistantScreen() {
   const currentLanguage = profile?.language || "fr"; // Get language
   const t = useTranslation(currentLanguage); // Use hook
 
-  // Integrate Speech Recognition
+  // Integrate Native Voice Recording
   const {
-    isListening,
-    startListening,
-    stopListening,
-    transcript,
-    micActive
-  } = useSpeechRecognition();
+    isRecording,
+    startRecording,
+    stopRecording,
+  } = useVoiceRecording();
+
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   const netInfo = useNetInfo();
 
-  // Sync transcript to input when listening
-  useEffect(() => {
-    if (isListening && transcript) {
-      setInputText(transcript);
-    }
-  }, [transcript, isListening]);
+  // Transcription is handled after recording stops
 
   useEffect(() => {
     // Scroll to end whenever messages change
@@ -65,6 +62,22 @@ export default function AssistantScreen() {
       }
     }, 100);
   }, [messages, isTyping]);
+
+  const insets = useSafeAreaInsets();
+  const { initialMessage } = useLocalSearchParams<{ initialMessage?: string }>();
+  const initialProcessed = useRef(false);
+
+  useEffect(() => {
+    if (initialMessage && !initialProcessed.current) {
+      initialProcessed.current = true;
+      // We need to wait a bit for the component to mount and then trigger send
+      setTimeout(() => {
+        setInputText(initialMessage);
+        // We can't call handleSend directly here because it's defined below.
+        // Let's use a trigger state or move handleSend up.
+      }, 500);
+    }
+  }, [initialMessage]);
 
   const handleActionPress = (action: string, messageId: string) => {
     if (action === "navigate:exercises") {
@@ -80,51 +93,65 @@ export default function AssistantScreen() {
     }
   };
 
-  const handleSend = async () => {
-    if (!inputText.trim()) return;
+  const handleSend = async (overrideText?: any, audioUri?: string) => {
+    const textToUse = (typeof overrideText === 'string' ? overrideText : inputText).trim();
+    if (!textToUse && !audioUri) return;
 
     HapticFeedback.impactAsync(HapticFeedback.ImpactFeedbackStyle.Medium);
+    const userText = textToUse;
+    if (!overrideText) setInputText("");
 
-    const userText = inputText.trim();
-    setInputText("");
-
-    // Create Session if needed (for now using a fixed 'default' session or current date)
-    const sessionId = "session_default"; // In real app, manage session IDs
-    createSession({ id: sessionId, title: "Conversation", created_at: new Date().toISOString() });
+    const sessionId = "session_default";
+    await createSession({ id: sessionId, title: "Conversation", created_at: new Date().toISOString() });
 
     const userMsg = {
       id: Crypto.randomUUID(),
       type: "user" as const,
-      text: userText,
+      text: userText || (currentLanguage === "en" ? "Voice Message" : "Message Vocal"),
+      audioUri: audioUri,
+      status: audioUri ? "sending" : "sent",
       timestamp: new Date().toISOString(),
     };
 
-    // Save to DB
-    saveMessage({
-      id: userMsg.id,
-      session_id: sessionId,
-      role: "user",
-      content: userMsg.text,
-      timestamp: userMsg.timestamp
-    });
-
-    // Update UI immediately with user message
-    setMessages((prev: any[]) => [...prev, userMsg]); // Fixed TS7006
-    setIsTyping(true); // Start typing animation
+    setMessages((prev: any[]) => [...prev, userMsg]);
+    setIsTyping(true);
 
     try {
-      // 2. Get Response (Online -> Offline Fallback)
-      let response = null;
+      let finalPrompt = userText;
 
-      // Try Online if connected
-      if (netInfo.isConnected !== false) {
-        response = await fetchAIResponse(userText, profile, currentLanguage);
+      // If it's a voice message, we might need to transcribe it first
+      if (audioUri && !userText) {
+        setIsTranscribing(true);
+        try {
+          const transcriptionResult = await audioService.transcribe(audioUri);
+          finalPrompt = transcriptionResult.text;
+
+          // Update message text with transcription
+          setMessages((prev: any[]) => prev.map(m => m.id === userMsg.id ? { ...m, text: finalPrompt, status: "sent" } : m));
+        } catch (err) {
+          console.error("Transcription error", err);
+          finalPrompt = "[Audio non transcrit]";
+        } finally {
+          setIsTranscribing(false);
+        }
       }
 
-      // Fallback to Offline
+      // Save to DB
+      await saveMessage({
+        id: userMsg.id,
+        session_id: sessionId,
+        role: "user",
+        content: finalPrompt || "[Audio]",
+        timestamp: userMsg.timestamp
+      });
+
+      let response = null;
+      if (netInfo.isConnected !== false) {
+        response = await fetchAIResponse(finalPrompt || "...", profile, currentLanguage);
+      }
+
       if (!response) {
-        console.log("Using Offline AI");
-        response = await generateOfflineResponse(userText, profile, currentLanguage);
+        response = await generateOfflineResponse(finalPrompt || "...", profile, currentLanguage);
       }
 
       const assistantMessage = {
@@ -133,19 +160,28 @@ export default function AssistantScreen() {
         text: response.text,
         timestamp: new Date().toISOString(),
         helpful: null,
-        actions: response.actions // Attach actions if present
+        actions: response.actions
       };
 
-      // 3. Add Assistant Message
-      // 3. Add Assistant Message
       setMessages((prev: any[]) => [...prev, assistantMessage]);
       HapticFeedback.notificationAsync(HapticFeedback.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("AI Error", error);
     } finally {
       setIsTyping(false);
+      setIsTranscribing(false);
     }
   };
+
+  useEffect(() => {
+    if (initialMessage && !initialProcessed.current) {
+      initialProcessed.current = true;
+      // We need to wait a bit for dependencies to be ready
+      setTimeout(() => {
+        handleSend(initialMessage);
+      }, 800);
+    }
+  }, [initialMessage]);
 
   // Dynamic Default Message Translation
   useEffect(() => {
@@ -164,15 +200,16 @@ export default function AssistantScreen() {
     }
   }, [currentLanguage, messages, setMessages]);
 
-  const handleMicPress = () => {
-    if (isListening) {
-      stopListening();
+  const handleMicPress = async () => {
+    if (isRecording) {
+      const uri = await stopRecording();
+      if (uri) {
+        handleSend(undefined, uri);
+      }
     } else {
-      startListening();
+      await startRecording();
     }
   };
-
-  const insets = useSafeAreaInsets(); // Hook for safe area
 
   return (
     <View style={styles.container}>
@@ -231,6 +268,14 @@ export default function AssistantScreen() {
                       styles.bubble,
                       isUser ? styles.bubbleUser : styles.bubbleAssistant
                     ]}>
+                      {msg.audioUri && (
+                        <VoicePlayer uri={msg.audioUri} isUser={isUser} />
+                      )}
+
+                      {msg.status === "sending" && (
+                        <ActivityIndicator size="small" color="white" style={{ marginBottom: 4 }} />
+                      )}
+
                       <Text style={[
                         styles.messageText,
                         isUser ? styles.textUser : styles.textAssistant
@@ -274,7 +319,7 @@ export default function AssistantScreen() {
           })}
 
           {/* Typing Indicator */}
-          {isTyping && (
+          {(isTyping || isTranscribing) && (
             <View style={{ marginBottom: 16 }}>
               <View style={{ flexDirection: "row", justifyContent: "flex-start", alignItems: "flex-start" }}>
                 <View style={styles.msgAvatar}>
@@ -282,7 +327,7 @@ export default function AssistantScreen() {
                 </View>
                 <View style={[styles.bubble, styles.bubbleAssistant, { paddingVertical: 12 }]}>
                   <Text style={[styles.textAssistant, { fontStyle: "italic", color: "#6B7280" }]}>
-                    {t("typing")}
+                    {isTranscribing ? (currentLanguage === "en" ? "Transcribing..." : "Transcription...") : t("typing")}
                   </Text>
                 </View>
               </View>
@@ -292,35 +337,35 @@ export default function AssistantScreen() {
         </ScrollView>
 
         {/* FOOTER INPUT */}
-        <View style={styles.inputArea}>
+        <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <TextInput
             style={styles.input}
-            placeholder={isListening ? t("listen") : t("messagePlaceholder")}
+            placeholder={isRecording ? (currentLanguage === "en" ? "Recording..." : "Enregistrement...") : t("messagePlaceholder")}
             placeholderTextColor="#9CA3AF"
             value={inputText}
             onChangeText={setInputText}
             multiline
-            editable={!isListening}
+            editable={!isRecording}
           />
 
           <TouchableOpacity
             style={[
               styles.iconButton,
-              isListening && { backgroundColor: "#FEE2E2", borderColor: "#EF4444" }
+              isRecording && { backgroundColor: "#FEE2E2", borderColor: "#EF4444" }
             ]}
             onPress={handleMicPress}
           >
             <Feather
-              name={isListening ? "mic-off" : "mic"}
+              name={isRecording ? "mic-off" : "mic"}
               size={22}
-              color={isListening ? "#EF4444" : "#6B7280"}
+              color={isRecording ? "#EF4444" : "#6B7280"}
             />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.sendButton, (!inputText.trim() && !isListening) && styles.sendButtonDisabled]}
-            onPress={handleSend}
-            disabled={!inputText.trim() && !isListening}
+            style={[styles.sendButton, (!inputText.trim() && !isRecording) && styles.sendButtonDisabled]}
+            onPress={() => handleSend()}
+            disabled={!inputText.trim() && !isRecording}
           >
             <Feather name="send" size={24} color="white" />
           </TouchableOpacity>
@@ -421,7 +466,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   bubble: {
-    maxWidth: "80%",
+    maxWidth: IS_LARGE_SCREEN ? "80%" : "90%",
     padding: 16,
     borderRadius: 20,
   },

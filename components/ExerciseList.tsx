@@ -21,11 +21,12 @@ export default function ExerciseList() {
   const ID_PLEINE_CONSCIENCE = "tfsSXtjHZiU"; // Pleine conscience
   const ID_GRATITUDE = "R1cZ4s30WLQ"; // Journal de gratitude
 
-  const exercises = [
+  const allExercises = [
     {
       category_fr: "Respiration",
       category_en: "Breathing",
       icon: "💨",
+      objectives: ["obj_anxiety", "obj_stress"],
       items: [
         { name_fr: "Respiration 4-7-8", name_en: "4-7-8 Breathing", duration: "5 min", rating: 4.8, videoId: ID_RESPIRATION },
         { name_fr: "Cohérence cardiaque", name_en: "Cardiac Coherence", duration: "5 min", rating: 4.6, videoId: ID_COHERENCE },
@@ -35,6 +36,7 @@ export default function ExerciseList() {
       category_fr: "Méditation",
       category_en: "Meditation",
       icon: "🧠",
+      objectives: ["obj_resilience", "obj_confidence"],
       items: [
         { name_fr: "Scan corporel", name_en: "Body Scan", duration: "10 min", rating: 4.7, videoId: ID_SCAN_CORPOREL },
         { name_fr: "Pleine conscience", name_en: "Mindfulness", duration: "15 min", rating: 4.9, videoId: ID_PLEINE_CONSCIENCE },
@@ -44,9 +46,20 @@ export default function ExerciseList() {
       category_fr: "Gratitude",
       category_en: "Gratitude",
       icon: "💖",
+      objectives: ["obj_share_story", "obj_help_others"],
       items: [{ name_fr: "Journal de gratitude", name_en: "Gratitude Journal", duration: "5 min", rating: 4.6, videoId: ID_GRATITUDE }],
     },
   ];
+
+  // Logic: Sort categories based on user objectives
+  const userObjectives = profile?.objectives || [];
+  const exercises = [...allExercises].sort((a, b) => {
+    const aMatch = a.objectives.some(obj => userObjectives.includes(obj));
+    const bMatch = b.objectives.some(obj => userObjectives.includes(obj));
+    if (aMatch && !bMatch) return -1;
+    if (!aMatch && bMatch) return 1;
+    return 0;
+  });
 
   const handlePlay = (videoId?: string) => {
     if (videoId) {
@@ -65,6 +78,11 @@ export default function ExerciseList() {
             <Text style={[styles.catTitle, darkMode ? { color: "#FFF" } : {}]}>
               {currentLanguage === 'en' ? cat.category_en : cat.category_fr}
             </Text>
+            {cat.objectives.some(obj => userObjectives.includes(obj)) && (
+              <View style={styles.suggestedBadge}>
+                <Text style={styles.suggestedText}>✨ RECOMMANDÉ</Text>
+              </View>
+            )}
           </View>
 
           {cat.items.map((item, i) => (
@@ -131,4 +149,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  suggestedBadge: {
+    backgroundColor: "#FDF2F2",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginLeft: 10,
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+  },
+  suggestedText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#DC2626",
+  }
 });

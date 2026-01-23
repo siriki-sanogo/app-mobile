@@ -14,8 +14,12 @@ import { MOOD_ICONS } from "@/constants/data";
 import { useTranslation } from "../contexte/i18n";
 
 export default function HistoryScreen() {
-  const { sessions, profile } = useAppContext();
+  const { sessions, profile, refreshSessions } = useAppContext();
   const t = useTranslation(profile?.language || "fr");
+
+  React.useEffect(() => {
+    refreshSessions();
+  }, []);
 
   const renderSession = ({ item }: any) => (
     <View style={styles.sessionCard}>

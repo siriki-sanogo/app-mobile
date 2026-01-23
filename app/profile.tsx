@@ -98,7 +98,9 @@ export default function ProfileScreen() {
 
   const handleGoBack = async () => {
     await HapticFeedback.impactAsync(HapticFeedback.ImpactFeedbackStyle.Light);
-    router.back();
+    setCurrentScreen("dashboard");
+    // Also try router.back() for stack navigation consistency
+    try { router.back(); } catch (e) { }
   };
 
   return (

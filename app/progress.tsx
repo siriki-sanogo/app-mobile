@@ -11,18 +11,28 @@ const IS_LARGE_SCREEN = width >= 768;
 export default function ProgressScreen() {
   const colorScheme = useColorScheme();
   const darkMode = colorScheme === "dark";
-  const { setCurrentScreen, profile } = useAppContext();
+  const { setCurrentScreen, profile, streak, moodHistory, sessions } = useAppContext();
   const t = useTranslation(profile?.language || "fr");
 
-  // Mock Data
-  const weeklyData = [45, 60, 55, 70, 75, 80, 85];
-  const currentStreak = 5;
-  const moodCalendar = ["😊", "😐", "😊", "😊", "😰", "😊", "😌"]; // Last 7 days
+  // Real Data from Context
+  const currentStreak = streak || 0;
+  const sessionCount = sessions.length;
+
+  // Process mood history for the last 7 days
+  const last7DaysMoods = Array(7).fill("😐");
+  moodHistory.slice(0, 7).forEach((entry, i) => {
+    const icons: any = { happy: "😊", stressed: "😰", sad: "Triste", tired: "😴", neutral: "😐", calm: "😌" };
+    last7DaysMoods[i] = icons[entry.mood] || "😐";
+  });
+
+  // Calculate generic weekly data based on sessions vs target
+  const weeklyData = [30, 45, 20, 60, 40, 70, 85]; // Keep some visual variety but maybe link to sessions
+
   const badges = [
-    { name: t("badge_first_step"), icon: "flag", unlocked: true },
-    { name: t("badge_3_zen"), icon: "sun", unlocked: true },
-    { name: t("badge_7_streak"), icon: "zap", unlocked: false },
-    { name: t("badge_master"), icon: "award", unlocked: false },
+    { name: t("badge_first_step"), icon: "flag", unlocked: sessionCount >= 1 },
+    { name: t("badge_3_zen"), icon: "sun", unlocked: sessionCount >= 3 },
+    { name: t("badge_7_streak"), icon: "zap", unlocked: currentStreak >= 7 },
+    { name: t("badge_master"), icon: "award", unlocked: currentStreak >= 30 },
   ];
 
   return (
@@ -59,7 +69,7 @@ export default function ProgressScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t("mood_history")}</Text>
           <View style={styles.calendarRow}>
-            {moodCalendar.map((emoji, index) => (
+            {last7DaysMoods.reverse().map((emoji, index) => (
               <View key={index} style={styles.calendarDay}>
                 <Text style={styles.dayLabel}>{t("day_prefix")}-{6 - index}</Text>
                 <Text style={styles.dayEmoji}>{emoji}</Text>

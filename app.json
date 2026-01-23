@@ -1,16 +1,17 @@
 {
   "expo": {
-    "name": "dispositif-contenu-positif",
+    "name": "Good App",
     "slug": "dispositif-contenu-positif",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "dispositifcontenupositif",
+    "scheme": "goodapp",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "package": "com.dispositif.mobile",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -21,7 +22,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -44,6 +45,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "aabfae1b-d8f4-411e-9eb7-d7dddc46c668"
+      }
+    },
+    "owner": "siriki"
   }
 }

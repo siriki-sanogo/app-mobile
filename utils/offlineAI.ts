@@ -341,7 +341,7 @@ function normalize(text: string): string {
 }
 
 import { UserProfile } from "../contexte/AppContext";
-import { searchTexts } from "../services/database";
+import { searchReligiousTexts } from "../services/database";
 
 /**
  * Main AI function
@@ -369,8 +369,8 @@ export async function generateOfflineResponse(
     const foundDbKeyword = dbKeywords.find(k => normalizedInput.includes(normalize(k)));
 
     if (foundDbKeyword) {
-        // Search in DB
-        const results = await searchTexts(foundDbKeyword);
+        // Search in DB (primary religious_texts table)
+        const results = await searchReligiousTexts(foundDbKeyword) as any[];
         if (results && results.length > 0) {
             // Pick a random result
             const randomQuote = results[Math.floor(Math.random() * results.length)];

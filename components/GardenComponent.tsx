@@ -43,23 +43,27 @@ export default function GardenComponent({ level }: Props) {
 
     return (
         <View style={styles.container}>
-            <View style={styles.sky}>
-                <Text style={{ fontSize: 40, position: 'absolute', top: 10, right: 20 }}>☀️</Text>
-                <Text style={{ fontSize: 30, position: 'absolute', top: 30, left: 20, opacity: 0.6 }}>☁️</Text>
-            </View>
+            <LinearGradient
+                colors={["#E0F2FE", "#F0F9FF"]}
+                style={styles.gardenBase}
+            >
+                <View style={styles.sky}>
+                    <Text style={{ fontSize: 44, position: 'absolute', top: 10, right: 30 }}>☀️</Text>
+                    <Text style={{ fontSize: 34, position: 'absolute', top: 35, left: 25, opacity: 0.5 }}>☁️</Text>
+                    <Text style={{ fontSize: 24, position: 'absolute', top: 15, left: 60, opacity: 0.3 }}>☁️</Text>
+                </View>
 
-            <View style={styles.gardenBase}>
                 <Animated.View style={[
                     styles.plantContainer,
                     { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
                 ]}>
-                    <Text style={{ fontSize: 80 }}>{icon}</Text>
+                    <Text style={{ fontSize: 90 }}>{icon}</Text>
                 </Animated.View>
                 <View style={styles.ground} />
-            </View>
+            </LinearGradient>
 
             <View style={styles.info}>
-                <Text style={styles.stageLabel}>{t("level")} {level} : {label}</Text>
+                <Text style={styles.stageLabel}>{t("level")} {level} • {label}</Text>
                 <Text style={styles.subtext}>{t("garden_keep_going")}</Text>
             </View>
         </View>
@@ -68,48 +72,49 @@ export default function GardenComponent({ level }: Props) {
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: "#F0F9FF",
-        borderRadius: 16,
+        borderRadius: 24,
         overflow: "hidden",
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: "#BAE6FD",
-    },
-    sky: {
-        height: 80,
-        backgroundColor: "#E0F2FE",
+        backgroundColor: "white",
     },
     gardenBase: {
-        height: 120,
+        height: 180,
         justifyContent: "flex-end",
         alignItems: "center",
-        backgroundColor: "#E0F2FE",
         position: 'relative',
     },
+    sky: {
+        ...StyleSheet.absoluteFillObject,
+    },
     ground: {
-        height: 20,
-        backgroundColor: "#86EFAC",
+        height: 16,
+        backgroundColor: "#4ADE80",
         width: "100%",
-        position: 'absolute',
-        bottom: 0,
+        borderTopWidth: 2,
+        borderColor: "#22C55E",
+        opacity: 0.8,
     },
     plantContainer: {
-        marginBottom: 10,
+        marginBottom: 8,
         zIndex: 10,
     },
     info: {
-        padding: 12,
-        backgroundColor: "white",
-        alignItems: 'center'
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        backgroundColor: "rgba(255, 255, 255, 0.9)",
+        alignItems: 'center',
+        borderTopWidth: 1,
+        borderColor: "rgba(0, 0, 0, 0.05)",
     },
     stageLabel: {
-        fontSize: 16,
-        fontWeight: "700",
+        fontSize: 15,
+        fontWeight: "800",
         color: "#065F46",
+        letterSpacing: 0.3,
     },
     subtext: {
-        fontSize: 12,
+        fontSize: 13,
         color: "#64748B",
         marginTop: 4,
+        fontWeight: "600",
     }
 });

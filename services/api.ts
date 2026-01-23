@@ -49,6 +49,7 @@ const api = axios.create({
     baseURL: API_URL,
     headers: {
         "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true", // Bypass ngrok free tier landing page
     },
     timeout: 10000,
 });
@@ -96,7 +97,30 @@ export const syncServiceApi = {
     },
 };
 
-// --- Services Externes (Dictionnaire, Coran, AI) ---
+// --- Services Externes (Dictionnaire, Coran, AI, Audio) ---
+
+export const audioService = {
+    transcribe: async (uri: string) => {
+        const formData = new FormData();
+        // Extract filename from URI
+        const filename = uri.split("/").pop() || "recording.m4a";
+        const type = "audio/m4a"; // Default expo-av type is m4a
+
+        // @ts-ignore
+        formData.append("file", {
+            uri,
+            name: filename,
+            type,
+        });
+
+        const response = await api.post("/audio/transcribe", formData, {
+            headers: {
+                "Content-Type": "multipart/form-data",
+            },
+        });
+        return response.data;
+    },
+};
 
 export const searchDictionary = async (word: string): Promise<ApiResult[]> => {
     try {
@@ -165,8 +189,8 @@ export const fetchAIResponse = async (prompt: string, profile: any, language: "f
     // On utilise notre moteur IA (RAG + Mock/Llama)
     const result = await generatePositiveContent(prompt);
 
-    // Si on a une clé API Hugging Face, on pourrait hybrider, 
-    // mais ici on respecte l'objectif "Offline first".
+    if (!result) return null;
+
     return {
         text: result.response,
         actions: [] // On pourra ajouter des actions basées sur l'humeur plus tard
