@@ -7,7 +7,7 @@ import { Platform } from "react-native";
 
 const USE_NGROK = false; // <--- Mettez à 'true' si vous utilisez Ngrok
 const NGROK_URL = "https://4f65f5506cc7.ngrok-free.app";
-const LOCAL_IP = "localhost"; // <--- localhost fonctionne grâce à 'adb reverse'
+const LOCAL_IP = Platform.OS === 'web' ? "localhost" : "10.204.86.83"; // <--- Auto-switch for Web
 
 const API_HOST = USE_NGROK ? NGROK_URL.replace("https://", "") : LOCAL_IP;
 

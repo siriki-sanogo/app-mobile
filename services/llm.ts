@@ -23,24 +23,55 @@ let contextInstance: any = null;
 // --- MOCK (Fallback) ---
 const mockGenerate = async (prompt: string, context: string): Promise<AIResponse> => {
     console.log("⚠️ [MOCK MODE] LLM Inference");
-    const lowerPrompt = prompt.toLowerCase();
-    let detectedMood = "neutre";
 
-    if (lowerPrompt.includes("triste") || lowerPrompt.includes("mal") || lowerPrompt.includes("peur")) {
-        detectedMood = "triste";
-    } else if (lowerPrompt.includes("joie") || lowerPrompt.includes("heureux") || lowerPrompt.includes("bien")) {
-        detectedMood = "joyeux";
-    } else if (lowerPrompt.includes("colère") || lowerPrompt.includes("énervé")) {
-        detectedMood = "colère";
+    // Import dynamique pour éviter les cycles si nécessaire, ou utiliser l'import déjà présent si possible
+    const { moodClassifier } = require('./moodClassifier');
+
+    // 1. Analyse de l'humeur avec le classifieur avancé
+    const moodResult = moodClassifier.classify(prompt);
+    const dominantEmotion = moodResult.dominantEmotion;
+    const moodLevel = moodResult.mood; // 'very_bad', 'bad', 'neutral', 'good', 'very_good'
+
+    // 2. Sélection d'une réponse empathique basée sur l'humeur
+    let empathicResponse = "";
+    switch (dominantEmotion) {
+        case 'sadness':
+        case 'depression':
+            empathicResponse = "Je sens beaucoup de tristesse. N'oubliez pas que vous n'êtes pas seul.";
+            break;
+        case 'anxiety':
+        case 'stress':
+        case 'fear':
+            empathicResponse = "L'anxiété peut être envahissante. Prenons un moment pour respirer ensemble.";
+            break;
+        case 'anger':
+        case 'frustration':
+            empathicResponse = "C'est normal de ressentir de la colère. Essayons de comprendre ce qui vous touche.";
+            break;
+        case 'joy':
+        case 'happiness':
+            empathicResponse = "Quelle belle énergie ! C'est merveilleux de vous sentir ainsi.";
+            break;
+        case 'neutral':
+        default:
+            empathicResponse = "Je vous écoute. Dites-m'en plus.";
+            break;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // 3. Construction de la réponse finale
+    let finalResponse = `[MOCK] (Emotion: ${dominantEmotion})\n\n${empathicResponse}`;
+
+    if (context && context.length > 0) {
+        finalResponse += `\n\n📚 Voici ce que j'ai trouvé pour vous aider :\n${context}`;
+    } else {
+        finalResponse += `\n\n(Je n'ai pas trouvé de textes spécifiques, mais je suis là pour vous.)`;
+    }
 
     return {
-        mood: detectedMood,
-        response: context.length > 0
-            ? `[MOCK] J'ai détecté : ${detectedMood}.\n\nPour vous aider :\n\n${context}`
-            : `[MOCK] J'ai détecté : ${detectedMood}.\n\nGardez espoir.`,
+        mood: dominantEmotion,
+        response: finalResponse,
         sources: [],
     };
 };
@@ -98,20 +129,55 @@ const nativeGenerate = async (prompt: string, context: string): Promise<AIRespon
     }
 };
 
+// --- WEB (Backend Proxy) ---
+const webGenerate = async (prompt: string, context: string): Promise<AIResponse> => {
+    try {
+        // On importe api ici pour éviter les cycles d'imports circulaires si api.ts importe llm.ts
+        const { default: api } = require('./api');
+
+        console.log("🌐 [WEB MODE] Calling Backend AI...");
+
+        // On envoie le prompt + contexte au backend qui gère (Groq/OpenAI/etc.)
+        const response = await api.post('/ai/chat', {
+            messages: [
+                { role: "system", content: `Tu es un assistant bienveillant. Utilise ce contexte si utile: ${context}` },
+                { role: "user", content: prompt }
+            ],
+            model: "llama3-8b-8192"
+        });
+
+        return {
+            mood: "backend_ai",
+            response: response.data.response,
+            sources: []
+        };
+    } catch (error) {
+        console.warn("⚠️ Backend AI failed (Missing Key?), falling back to Smart Mock", error);
+        return await mockGenerate(prompt, context);
+    }
+};
+
 export const generatePositiveContent = async (
     userInput: string
 ): Promise<AIResponse | null> => {
     try {
         const context = await getRAGContext(userInput);
 
-        // Si LlamaContext est dispo et qu'on n'est pas sur Web, on tente le natif
-        if (LlamaContext && Platform.OS !== 'web') {
+        // 1. Android Native (Offline Llama)
+        if (LlamaContext && Platform.OS === 'android') {
             return await nativeGenerate(userInput, context);
-        } else {
-            return await mockGenerate(userInput, context);
         }
+
+        // 2. Web (Backend API -> Groq)
+        if (Platform.OS === 'web') {
+            return await webGenerate(userInput, context);
+        }
+
+        // 3. Fallback (iOS/Other) -> Smart Mock
+        return await mockGenerate(userInput, context);
+
     } catch (error) {
         console.error("LLM Error:", error);
-        return null; // Return null to allow fallback to keyword-based offline AI
+        return null;
     }
 };

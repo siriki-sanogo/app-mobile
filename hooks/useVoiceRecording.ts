@@ -11,7 +11,9 @@ export function useVoiceRecording() {
     async function startRecording() {
         try {
             if (Platform.OS === 'web') {
-                console.warn("Native recording not supported on web.");
+                console.log("⚠️ [Web] Mode simulation d'enregistrement vocal");
+                // On simule un état d'enregistrement pour tester l'UI
+                setIsRecording(true);
                 return;
             }
 
@@ -45,6 +47,12 @@ export function useVoiceRecording() {
     }
 
     async function stopRecording() {
+        if (Platform.OS === 'web') {
+            setIsRecording(false);
+            // On retourne une fausse URI pour que le reste de l'app pense qu'on a un fichier
+            return "web-simulated-audio-uri";
+        }
+
         if (!recording) return null;
 
         console.log("Stopping recording..");
