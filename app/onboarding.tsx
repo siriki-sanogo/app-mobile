@@ -225,7 +225,7 @@ export default function OnboardingScreen() {
                       onPress={() => toggleSelection(obj, selectedObjectives, setSelectedObjectives)}
                       activeOpacity={0.8}
                     >
-                      <Text style={[styles.listText, selectedObjectives.includes(obj) && { color: "white" }]}>{t(obj)}</Text>
+                      <Text style={[styles.listText, selectedObjectives.includes(obj) && { color: "white" }]}>{t(obj as any)}</Text>
                       {selectedObjectives.includes(obj) && <Feather name="check" size={20} color="white" />}
                     </TouchableOpacity>
                   ))}

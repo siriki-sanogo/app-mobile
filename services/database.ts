@@ -108,6 +108,14 @@ export const initDatabase = async () => {
                 source TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS proverbs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                content TEXT NOT NULL,
+                author TEXT,
+                source TEXT,
+                language TEXT DEFAULT 'fr'
+            );
+
             CREATE TABLE IF NOT EXISTS chat_sessions (
                 id TEXT PRIMARY KEY,
                 title TEXT,
@@ -132,6 +140,7 @@ export const initDatabase = async () => {
 
             CREATE INDEX IF NOT EXISTS idx_religious_source_book ON religious_texts(source, book);
             CREATE INDEX IF NOT EXISTS idx_dict_word ON dictionaries(word);
+            CREATE INDEX IF NOT EXISTS idx_proverbs_language ON proverbs(language);
         `);
 
     console.log("Database initialized successfully");
@@ -261,4 +270,60 @@ export const getSessions = async () => {
     GROUP BY s.id
     ORDER BY s.created_at DESC
   `);
+};
+
+// --- Dictionary Functions ---
+
+export const searchDictionary = async (query: string, language?: string) => {
+  const db = await getDB();
+  let sql = "SELECT * FROM dictionaries WHERE word LIKE ?";
+  let args: any[] = [`%${query}%`];
+
+  if (language) {
+    sql += " AND language = ?";
+    args.push(language);
+  }
+
+  sql += " LIMIT 10";
+  return await db.getAllAsync(sql, args);
+};
+
+export const getDefinition = async (word: string, language: string = 'fr') => {
+  const db = await getDB();
+  return await db.getFirstAsync(
+    "SELECT * FROM dictionaries WHERE LOWER(word) = LOWER(?) AND language = ?",
+    [word, language]
+  );
+};
+
+// --- Proverbs Functions ---
+
+export const searchProverbs = async (query: string, language?: string) => {
+  const db = await getDB();
+  let sql = "SELECT * FROM proverbs WHERE content LIKE ?";
+  let args: any[] = [`%${query}%`];
+
+  if (language) {
+    sql += " AND language = ?";
+    args.push(language);
+  }
+
+  sql += " LIMIT 5";
+  return await db.getAllAsync(sql, args);
+};
+
+export const getRandomProverb = async (language: string = 'fr') => {
+  const db = await getDB();
+  return await db.getFirstAsync(
+    "SELECT * FROM proverbs WHERE language = ? ORDER BY RANDOM() LIMIT 1",
+    [language]
+  );
+};
+
+export const getProverbsByAuthor = async (author: string) => {
+  const db = await getDB();
+  return await db.getAllAsync(
+    "SELECT * FROM proverbs WHERE author LIKE ?",
+    [`%${author}%`]
+  );
 };

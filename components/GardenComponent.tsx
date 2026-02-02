@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useAppContext } from "../contexte/AppContext";
 import { useTranslation } from "../contexte/i18n";
 

@@ -46,7 +46,11 @@ export default function ChatScreen() {
 
         try {
             // Appel au service IA (Mode Mock pour l'instant)
-            const aiResult: AIResponse = await generatePositiveContent(userMessage.text);
+            const aiResult = await generatePositiveContent(userMessage.text);
+
+            if (!aiResult) {
+                throw new Error("AI response was null");
+            }
 
             const aiMessage: Message = {
                 id: (Date.now() + 1).toString(),
@@ -59,6 +63,14 @@ export default function ChatScreen() {
             setMessages((prev) => [...prev, aiMessage]);
         } catch (error) {
             console.error("Erreur Chat:", error);
+            // Add error message to chat
+            const errorMessage: Message = {
+                id: (Date.now() + 1).toString(),
+                text: "Désolé, une erreur s'est produite. Veuillez réessayer.",
+                sender: "ai",
+                timestamp: new Date(),
+            };
+            setMessages((prev) => [...prev, errorMessage]);
         } finally {
             setLoading(false);
         }

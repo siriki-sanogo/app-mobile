@@ -341,7 +341,7 @@ function normalize(text: string): string {
 }
 
 import { UserProfile } from "../contexte/AppContext";
-import { searchReligiousTexts } from "../services/database";
+import { searchReligiousTexts, getRandomProverb, searchProverbs, getDefinition } from "../services/database";
 
 /**
  * Main AI function
@@ -363,9 +363,56 @@ export async function generateOfflineResponse(
     let responseText = "";
     let responseActions: any[] | undefined;
 
+    // 0. Check for proverb/wisdom request
+    const proverbKeywords = ["proverbe", "proverb", "sagesse", "wisdom", "citation", "quote", "inspiration"];
+    const wantsProverb = proverbKeywords.some(k => normalizedInput.includes(normalize(k)));
+
+    if (wantsProverb) {
+        try {
+            const proverb = await getRandomProverb(language) as any;
+            if (proverb) {
+                const author = proverb.author ? ` — ${proverb.author}` : "";
+                if (language === 'fr') {
+                    responseText = `Voici une parole de sagesse pour vous :\n\n"${proverb.content}"${author}`;
+                } else {
+                    responseText = `Here is a word of wisdom for you:\n\n"${proverb.content}"${author}`;
+                }
+                return { text: responseText };
+            }
+        } catch (e) {
+            console.log("Proverb search failed, continuing with other sources");
+        }
+    }
+
+    // 0b. Check for dictionary/definition request
+    const definitionKeywords = ["définition", "definition", "signifie", "means", "veut dire", "c'est quoi"];
+    const wantsDefinition = definitionKeywords.some(k => normalizedInput.includes(normalize(k)));
+
+    if (wantsDefinition) {
+        // Extract potential word to define (last word or word after "de/of")
+        const words = input.split(/\s+/).filter(w => w.length > 2);
+        const wordToDefine = words[words.length - 1]?.replace(/[?!.,]/g, "");
+
+        if (wordToDefine) {
+            try {
+                const definition = await getDefinition(wordToDefine, language) as any;
+                if (definition) {
+                    if (language === 'fr') {
+                        responseText = `**${definition.word}** : ${definition.definition}`;
+                    } else {
+                        responseText = `**${definition.word}**: ${definition.definition}`;
+                    }
+                    return { text: responseText };
+                }
+            } catch (e) {
+                console.log("Definition lookup failed, continuing");
+            }
+        }
+    }
+
     // 1. Check for Religious/Cultural Context (DB Search)
     // Keywords triggering DB search
-    const dbKeywords = ["bible", "coran", "quran", "verset", "sourate", "proverbe", "allah", "dieu", "god", "jesus", "jésus", "sagesse", "paix", "peace"];
+    const dbKeywords = ["bible", "coran", "quran", "verset", "sourate", "allah", "dieu", "god", "jesus", "jésus", "paix", "peace"];
     const foundDbKeyword = dbKeywords.find(k => normalizedInput.includes(normalize(k)));
 
     if (foundDbKeyword) {
@@ -385,6 +432,7 @@ export async function generateOfflineResponse(
             return { text: responseText };
         }
     }
+
 
 
     // Helper to get standard actions

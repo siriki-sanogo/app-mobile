@@ -11,6 +11,7 @@ export const translations = {
 
         // Onboarding
         religion: "Religion",
+        age: "Tranche d'âge",
         objectives: "Objectifs",
         language_label: "Langue",
         books: "Livres",

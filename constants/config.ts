@@ -5,9 +5,9 @@ import { Platform } from "react-native";
 // 1. CHERCHEZ VOTRE IP : Tapez 'ipconfig' et cherchez "Adresse IPv4" (ex: 192.168.1.15)
 // 2. OU UTILISEZ NGROK : Lancez 'ngrok http 8000' et copiez l'URL https
 
-const USE_NGROK = true; // <--- Mettez à 'true' si vous utilisez Ngrok
-const NGROK_URL = "https://4a0c43cbf0ac.ngrok-free.app";
-const LOCAL_IP = "192.168.1.15"; // <--- Votre IP locale ici
+const USE_NGROK = false; // <--- Mettez à 'true' si vous utilisez Ngrok
+const NGROK_URL = "https://4f65f5506cc7.ngrok-free.app";
+const LOCAL_IP = "localhost"; // <--- localhost fonctionne grâce à 'adb reverse'
 
 const API_HOST = USE_NGROK ? NGROK_URL.replace("https://", "") : LOCAL_IP;
 

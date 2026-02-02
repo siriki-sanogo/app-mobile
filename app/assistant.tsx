@@ -3,6 +3,7 @@ import * as Crypto from "expo-crypto";
 import * as HapticFeedback from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   KeyboardAvoidingView,
   Platform,
@@ -25,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useVoiceRecording } from "../hooks/useVoiceRecording";
 import { fetchAIResponse, audioService } from "../services/api";
 import { generateOfflineResponse } from "../utils/offlineAI";
+import { speechService } from "../services/speechService";
 import VoicePlayer from "../components/VoicePlayer";
 
 const { width } = Dimensions.get("window");
@@ -49,6 +51,8 @@ export default function AssistantScreen() {
   } = useVoiceRecording();
 
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
   const netInfo = useNetInfo();
 
@@ -90,6 +94,35 @@ export default function AssistantScreen() {
     } else if (action === "call:emergency") {
       // Placeholder for emergency call
       console.log("Calling emergency");
+    }
+  };
+
+  // TTS - Speak assistant message
+  const handleSpeak = async (text: string, messageId: string) => {
+    const currentlySpeaking = await speechService.isSpeaking();
+
+    if (currentlySpeaking && speakingMessageId === messageId) {
+      // Stop speaking
+      await speechService.stop();
+      setIsSpeaking(false);
+      setSpeakingMessageId(null);
+      HapticFeedback.selectionAsync();
+    } else {
+      // Start speaking
+      if (currentlySpeaking) {
+        await speechService.stop();
+      }
+      setIsSpeaking(true);
+      setSpeakingMessageId(messageId);
+      HapticFeedback.impactAsync(HapticFeedback.ImpactFeedbackStyle.Light);
+
+      await speechService.speak(text, {
+        language: currentLanguage as 'fr' | 'en',
+        rate: 0.95,
+      });
+
+      setIsSpeaking(false);
+      setSpeakingMessageId(null);
     }
   };
 
@@ -236,8 +269,17 @@ export default function AssistantScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.audioButton}>
-          <Feather name="volume-2" size={24} color="#F97316" />
+        <TouchableOpacity
+          style={[styles.audioButton, isSpeaking && { backgroundColor: 'rgba(34, 197, 94, 0.2)' }]}
+          onPress={async () => {
+            if (isSpeaking) {
+              await speechService.stop();
+              setIsSpeaking(false);
+              setSpeakingMessageId(null);
+            }
+          }}
+        >
+          <Feather name={isSpeaking ? "volume-x" : "volume-2"} size={24} color={isSpeaking ? "#22C55E" : "#F97316"} />
         </TouchableOpacity>
       </View>
 
@@ -282,8 +324,26 @@ export default function AssistantScreen() {
                       ]}>
                         {msg.text}
                       </Text>
-                      {msg.text.includes("?") && !isUser && (
-                        <Feather name="volume-2" size={16} color="#9CA3AF" style={{ marginTop: 8 }} />
+                      {/* TTS Button for assistant messages */}
+                      {!isUser && msg.text && (
+                        <TouchableOpacity
+                          style={styles.speakButton}
+                          onPress={() => handleSpeak(msg.text, msg.id)}
+                        >
+                          <Feather
+                            name={speakingMessageId === msg.id ? "volume-x" : "volume-2"}
+                            size={16}
+                            color={speakingMessageId === msg.id ? "#22C55E" : "#9CA3AF"}
+                          />
+                          <Text style={[
+                            styles.speakButtonText,
+                            speakingMessageId === msg.id && { color: '#22C55E' }
+                          ]}>
+                            {speakingMessageId === msg.id
+                              ? (currentLanguage === 'en' ? 'Stop' : 'Stop')
+                              : (currentLanguage === 'en' ? 'Listen' : 'Écouter')}
+                          </Text>
+                        </TouchableOpacity>
                       )}
                     </View>
 
@@ -576,5 +636,20 @@ const styles = StyleSheet.create({
   },
   actionButtonTextSecondary: {
     color: "#374151",
+  },
+  speakButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: "rgba(156, 163, 175, 0.1)",
+  },
+  speakButtonText: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginLeft: 4,
+    fontWeight: "500",
   },
 });
