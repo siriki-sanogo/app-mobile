@@ -1,6 +1,5 @@
 import { Feather } from "@expo/vector-icons";
 import { useNetInfo } from "@react-native-community/netinfo";
-import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
     ScrollView,
@@ -9,133 +8,123 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    useColorScheme,
-    Linking
+    Modal,
 } from "react-native";
 import { useAppContext } from "../contexte/AppContext";
 import { useTranslation } from "../contexte/i18n";
-import { searchOnline } from "../services/api";
-import { searchTexts } from "../services/database";
+import { searchAllContent } from "../services/database";
+import { ALL_CARDS } from "../constants/data";
 
-const SEARCH_SOURCES = [
-    { id: "larousse_fr", labelKey: "source_fr", url: "https://www.larousse.fr/dictionnaires/francais/" },
-    { id: "wordreference_enfr", labelKey: "source_enfr", url: "https://www.wordreference.com/enfr/" },
-    { id: "cambridge_en", labelKey: "source_en", url: "https://dictionary.cambridge.org/dictionary/english/" },
-    { id: "quran", labelKey: "source_quran", url: "https://quran.com/search?q=" },
-    { id: "bible", labelKey: "source_bible", url: "https://www.biblegateway.com/quicksearch/?quicksearch=" },
-    { id: "gutenberg", labelKey: "source_african", url: "https://www.gutenberg.org/ebooks/search/?query=Du+Bois%2C+W.+E.+B." },
+const CATEGORIES = [
+    { id: "all", label_fr: "Tous", label_en: "All" },
+    { id: "coran", label_fr: "Coran", label_en: "Quran" },
+    { id: "bible", label_fr: "Bible", label_en: "Bible" },
+    { id: "african", label_fr: "Textes africains", label_en: "African Texts" },
 ];
 
 export default function UniversalSearch() {
-    const { profile } = useAppContext();
+    const { profile, darkMode } = useAppContext();
     const currentLanguage = profile?.language || "fr";
     const t = useTranslation(currentLanguage);
 
-    const colorScheme = useColorScheme();
-    const darkMode = colorScheme === "dark";
     const [query, setQuery] = useState("");
-    const [targetUrl, setTargetUrl] = useState("");
     const netInfo = useNetInfo();
-    const router = useRouter();
-    const [selectedSourceId, setSelectedSourceId] = useState(SEARCH_SOURCES[0].id);
+    const [selectedCategory, setSelectedCategory] = useState("all");
     const [loading, setLoading] = useState(false);
-    const [results, setResults] = useState([]);
-    const [selectedCategory, setSelectedCategory] = useState("all"); // Assuming a default category
+    const [results, setResults] = useState<any[]>([]);
+    const [selectedResult, setSelectedResult] = useState<any>(null);
 
     const handleSearch = async (text: string) => {
-        setQuery(text); // Update query state
-        if (text.length > 2) {
-            setLoading(true);
-            try {
-                console.log(`UniversalSearch: Searching for '${text}' in '${selectedCategory}'`);
-
-                // 1. Search Local DB
-                const dbResults = await searchTexts(text, selectedCategory);
-                console.log("UniversalSearch: Local Results:", dbResults.length);
-
-                let finalResults: any[] = dbResults.map((item: any) => ({
-                    id: `local-${item.id}`,
-                    title: `${item.book} ${item.chapter ? `${item.chapter}:${item.verse}` : ""}`,
-                    description: item.content,
-                    type: item.source,
-                }));
-
-                // Navigation Shortcuts (Exercises)
-                if (text.toLowerCase().includes("exercic") || text.toLowerCase().includes("exercise")) {
-                    finalResults.unshift({
-                        id: "nav-exercises",
-                        title: "Accéder aux Exercices",
-                        description: "Section Bien-être & Méditation",
-                        type: "navigation",
-                        route: "/dashboard/exercises" // Adjust path based on file structure
-                    });
-                }
-
-                // 2. Search Online if connected
-                if (netInfo.isConnected !== false) {
-                    console.log("Searching Online...");
-                    const apiResults = await searchOnline(text, selectedCategory);
-                    console.log("Online Results:", apiResults.length);
-
-                    const formattedApi = apiResults.map((item: any, index: number) => ({
-                        id: `api-${index}`, // Temporary ID
-                        title: item.title,
-                        description: item.description,
-                        type: item.source + " (Online)"
-                    }));
-                    finalResults = [...finalResults, ...formattedApi];
-                }
-
-                setResults(finalResults as any);
-            } catch (error) {
-                console.error("Search error:", error);
-            } finally {
-                setLoading(false);
-            }
-        } else {
+        setQuery(text);
+        if (text.length < 2) {
             setResults([]);
+            return;
         }
-    };
 
-    const handleResultPress = (item: any) => {
-        if (item.type === "navigation" && item.route) {
-            router.push(item.route);
-        } else {
-            // Navigate to assistant and pass the text as a param or via context
-            // For simplicity, we'll try to use the router and maybe the assistant will pick it up
-            console.log("Navigating to assistant with:", item.description);
-            router.push({
-                pathname: "/assistant",
-                params: { initialMessage: item.description }
-            } as any);
-        }
-    };
+        setLoading(true);
+        try {
+            const searchLower = text.toLowerCase();
+            let finalResults: any[] = [];
 
-    const handleSourcePress = async (source: typeof SEARCH_SOURCES[0]) => {
-        setSelectedSourceId(source.id);
-        if (!query) {
-            // If no search query, open the external link directly
-            const url = source.url;
-            const supported = await Linking.canOpenURL(url);
-            if (supported) {
-                await Linking.openURL(url);
+            // 1. Search ALL_CARDS (fullText, title, reference)
+            const cardResults = ALL_CARDS.filter((card) => {
+                // Filter by category
+                if (selectedCategory !== "all" && card.source !== selectedCategory) return false;
+
+                // Search in title, fullText, reference
+                const title = (currentLanguage === "en" ? card.title_en : card.title).toLowerCase();
+                const fullText = (currentLanguage === "en" ? (card as any).fullText_en : (card as any).fullText || "").toLowerCase();
+                const reference = ((card as any).reference || "").toLowerCase();
+
+                return title.includes(searchLower) || fullText.includes(searchLower) || reference.includes(searchLower);
+            }).map((card) => ({
+                id: `card-${card.id}`,
+                title: currentLanguage === "en" ? card.title_en : card.title,
+                description: currentLanguage === "en" ? (card as any).fullText_en : (card as any).fullText,
+                reference: (card as any).reference || "",
+                source: card.source,
+                emoji: card.emoji,
+                cardData: card,
+            }));
+
+            finalResults = [...cardResults];
+
+            // 2. Search Local DB
+            try {
+                console.log("[UniversalSearch] Calling searchAllContent with:", text, selectedCategory);
+                const dbResults = await searchAllContent(text, selectedCategory);
+                console.log("[UniversalSearch] DB returned", (dbResults as any[]).length, "results");
+                const formattedDb = (dbResults as any[]).map((item: any) => ({
+                    id: `db-${item.id}`,
+                    title: `${item.book} ${item.chapter ? `${item.chapter}:${item.verse}` : ""}`.trim(),
+                    description: item.content,
+                    reference: item.book,
+                    source: item.source,
+                    emoji: item.source === "bible" ? "📖" : item.source === "coran" ? "📚" : "🌍",
+                }));
+                // Avoid duplicates
+                const existingTitles = new Set(finalResults.map(r => r.title.toLowerCase()));
+                formattedDb.forEach(r => {
+                    if (!existingTitles.has(r.title.toLowerCase())) {
+                        finalResults.push(r);
+                    }
+                });
+            } catch (dbErr) {
+                console.log("DB search error:", dbErr);
             }
+
+            setResults(finalResults);
+        } catch (error) {
+            console.error("Search error:", error);
+        } finally {
+            setLoading(false);
         }
+    };
+
+    const handleCategoryChange = (catId: string) => {
+        setSelectedCategory(catId);
+        if (query.length >= 2) {
+            setTimeout(() => handleSearch(query), 100);
+        }
+    };
+
+    const getSourceLabel = (source: string) => {
+        return source === "bible" ? "📖 Bible" : source === "coran" ? "📚 Coran" : "🌍 Textes africains";
     };
 
     return (
         <View style={styles.container}>
             <Text style={[styles.title, darkMode ? { color: "#E5E7EB" } : { color: "#1F2937" }]}>{t("search_title")}</Text>
 
-            {/* Tabs (Sources/Categories) */}
+            {/* Category Tabs */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
-                {SEARCH_SOURCES.map((source: any) => (
+                {CATEGORIES.map((cat) => (
                     <TouchableOpacity
-                        key={source.id}
-                        onPress={() => handleSourcePress(source)}
+                        key={cat.id}
+                        onPress={() => handleCategoryChange(cat.id)}
                         style={[
                             styles.tab,
-                            selectedSourceId === source.id
+                            selectedCategory === cat.id
                                 ? { backgroundColor: "#F97316", borderColor: "#F97316" }
                                 : darkMode
                                     ? { backgroundColor: "#1F2937", borderColor: "#374151" }
@@ -145,27 +134,27 @@ export default function UniversalSearch() {
                         <Text
                             style={[
                                 styles.tabText,
-                                selectedSourceId === source.id
+                                selectedCategory === cat.id
                                     ? { color: "white", fontWeight: "700" }
                                     : darkMode
                                         ? { color: "#D1D5DB" }
                                         : { color: "#4B5563" },
                             ]}
                         >
-                            {t(source.labelKey)}
+                            {currentLanguage === "en" ? cat.label_en : cat.label_fr}
                         </Text>
                     </TouchableOpacity>
                 ))}
             </ScrollView>
 
-            {/* Input */}
-            <View style={[styles.inputContainer, darkMode ? { backgroundColor: "#1F2937" } : { backgroundColor: "white" }]}>
+            {/* Search Input */}
+            <View style={[styles.inputContainer, darkMode ? { backgroundColor: "#1F2937" } : { backgroundColor: "#F9FAFB" }]}>
                 <TextInput
                     style={[styles.input, darkMode ? { color: "white" } : { color: "#1F2937" }]}
                     placeholder={t("search_placeholder")}
                     placeholderTextColor="#9CA3AF"
                     value={query}
-                    onChangeText={(text) => handleSearch(text)} // Live search
+                    onChangeText={(text) => handleSearch(text)}
                     returnKeyType="search"
                 />
                 <TouchableOpacity style={styles.searchButton} onPress={() => handleSearch(query)}>
@@ -175,16 +164,92 @@ export default function UniversalSearch() {
 
             {/* Results List */}
             {results.length > 0 && (
-                <View style={[styles.resultsContainer, darkMode ? { backgroundColor: "#1F2937", borderColor: "#374151" } : { backgroundColor: "white", borderColor: "#E5E7EB" }]}>
-                    {results.map((item: any) => (
-                        <TouchableOpacity key={item.id} style={styles.resultItem} onPress={() => handleResultPress(item)}>
-                            <Text style={[styles.resultTitle, darkMode ? { color: "#E5E7EB" } : { color: "#1F2937" }]}>{item.title}</Text>
-                            <Text style={[styles.resultDesc, darkMode ? { color: "#9CA3AF" } : { color: "#6B7280" }]}>{item.description}</Text>
-                            <Text style={styles.resultSource}>{item.type}</Text>
+                <View style={[styles.resultsContainer, darkMode ? { backgroundColor: "#1F2937" } : { backgroundColor: "white" }]}>
+                    {results.slice(0, 10).map((item: any) => (
+                        <TouchableOpacity key={item.id} style={[styles.resultItem, darkMode ? { borderBottomColor: "#374151" } : {}]} onPress={() => setSelectedResult(item)}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                                <Text style={{ fontSize: 22 }}>{item.emoji}</Text>
+                                <View style={{ flex: 1 }}>
+                                    <Text numberOfLines={1} style={[styles.resultTitle, darkMode ? { color: "#E5E7EB" } : { color: "#1F2937" }]}>{item.title}</Text>
+                                    <Text numberOfLines={2} style={[styles.resultDesc, darkMode ? { color: "#9CA3AF" } : { color: "#6B7280" }]}>{item.description}</Text>
+                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 }}>
+                                        <Text style={styles.resultSource}>{getSourceLabel(item.source)}</Text>
+                                        {item.reference ? <Text style={[styles.resultSource, { color: "#3B82F6" }]}>• {item.reference}</Text> : null}
+                                    </View>
+                                </View>
+                                <Feather name="chevron-right" size={16} color={darkMode ? "#6B7280" : "#9CA3AF"} />
+                            </View>
                         </TouchableOpacity>
                     ))}
                 </View>
             )}
+
+            {/* No results */}
+            {query.length >= 2 && results.length === 0 && !loading && (
+                <View style={{ alignItems: "center", paddingVertical: 20 }}>
+                    <Text style={{ color: "#9CA3AF", fontSize: 14 }}>
+                        {currentLanguage === "en" ? "No results found" : "Aucun résultat trouvé"}
+                    </Text>
+                </View>
+            )}
+
+            {/* Detail Modal */}
+            <Modal
+                visible={!!selectedResult}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setSelectedResult(null)}
+            >
+                <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+                    <View style={{
+                        backgroundColor: darkMode ? "#1F2937" : "white",
+                        borderTopLeftRadius: 28,
+                        borderTopRightRadius: 28,
+                        padding: 24,
+                        paddingBottom: 40,
+                        maxHeight: "80%",
+                    }}>
+                        <View style={{ alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: darkMode ? "#4B5563" : "#D1D5DB", marginBottom: 20 }} />
+
+                        <TouchableOpacity
+                            onPress={() => setSelectedResult(null)}
+                            style={{ position: "absolute", top: 16, right: 16, zIndex: 1, padding: 8 }}
+                        >
+                            <Feather name="x" size={22} color={darkMode ? "#9CA3AF" : "#6B7280"} />
+                        </TouchableOpacity>
+
+                        <View style={{ alignSelf: "center", width: 64, height: 64, borderRadius: 18, backgroundColor: darkMode ? "#374151" : "#F3F4F6", justifyContent: "center", alignItems: "center", marginBottom: 16 }}>
+                            <Text style={{ fontSize: 32 }}>{selectedResult?.emoji}</Text>
+                        </View>
+
+                        <Text style={{ fontSize: 20, fontWeight: "800", color: darkMode ? "#F9FAFB" : "#111827", textAlign: "center", marginBottom: 8 }}>
+                            {selectedResult?.title}
+                        </Text>
+
+                        <View style={{ alignSelf: "center", backgroundColor: darkMode ? "#374151" : "#F0F5FF", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, marginBottom: 20 }}>
+                            <Text style={{ fontSize: 13, fontWeight: "700", color: "#3B82F6" }}>
+                                {selectedResult ? getSourceLabel(selectedResult.source) : ""}
+                                {selectedResult?.reference ? ` • ${selectedResult.reference}` : ""}
+                            </Text>
+                        </View>
+
+                        <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                            <Text style={{ fontSize: 16, lineHeight: 26, color: darkMode ? "#D1D5DB" : "#374151", textAlign: "center", fontStyle: "italic" }}>
+                                {`"${selectedResult?.description || ""}"`}
+                            </Text>
+                        </ScrollView>
+
+                        <TouchableOpacity
+                            style={{ backgroundColor: darkMode ? "#374151" : "#F3F4F6", borderRadius: 16, height: 48, justifyContent: "center", alignItems: "center", marginTop: 20 }}
+                            onPress={() => setSelectedResult(null)}
+                        >
+                            <Text style={{ fontSize: 15, fontWeight: "700", color: darkMode ? "#D1D5DB" : "#374151" }}>
+                                {currentLanguage === "en" ? "Close" : "Fermer"}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -216,9 +281,10 @@ const styles = StyleSheet.create({
     inputContainer: {
         flexDirection: "row",
         alignItems: "center",
-        borderRadius: 12,
+        borderRadius: 14,
         paddingHorizontal: 12,
-        paddingVertical: 8,
+        paddingVertical: 6,
+        borderWidth: 0,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
@@ -227,28 +293,34 @@ const styles = StyleSheet.create({
     },
     input: {
         flex: 1,
-        fontSize: 16,
+        fontSize: 15,
         marginRight: 8,
+        paddingVertical: 8,
+        borderWidth: 0,
     },
     searchButton: {
         backgroundColor: "#F97316",
         width: 40,
         height: 40,
-        borderRadius: 10,
+        borderRadius: 12,
         alignItems: "center",
         justifyContent: "center",
     },
     resultsContainer: {
         marginTop: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        padding: 12,
+        borderRadius: 16,
+        padding: 4,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 3,
     },
     resultItem: {
-        marginBottom: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: "#E5E7EB", // Simplified for now
-        paddingBottom: 8,
+        borderBottomColor: "#F3F4F6",
     },
     resultTitle: {
         fontWeight: "700",
@@ -257,12 +329,11 @@ const styles = StyleSheet.create({
     },
     resultDesc: {
         fontSize: 13,
+        lineHeight: 18,
     },
     resultSource: {
-        fontSize: 10,
+        fontSize: 11,
         color: "#F97316",
-        marginTop: 2,
-        textTransform: 'uppercase',
-        fontWeight: '700',
-    }
+        fontWeight: "700",
+    },
 });

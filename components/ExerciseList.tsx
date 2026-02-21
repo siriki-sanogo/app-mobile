@@ -1,18 +1,15 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, useColorScheme, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAppContext } from "../contexte/AppContext";
 import VideoPlayerModal from "./VideoPlayerModal";
 
 export default function ExerciseList() {
-  const colorScheme = useColorScheme();
-  const darkMode = colorScheme === "dark";
+  const { profile, darkMode } = useAppContext();
+  const currentLanguage = profile?.language || "fr";
 
   const [modalVisible, setModalVisible] = useState(false);
   const [currentVideoId, setCurrentVideoId] = useState<string | undefined>(undefined);
-
-  const { profile } = useAppContext();
-  const currentLanguage = profile?.language || "fr";
 
   // YouTube Video IDs (From User Request)
   const ID_COHERENCE = "r2wCA9SN4i4"; // Cohérence cardiaque

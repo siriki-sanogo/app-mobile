@@ -60,6 +60,7 @@ export interface Session {
 interface AppContextType {
   profile: UserProfile | null;
   setProfile: (p: UserProfile | null) => void;
+  updateProfile: (data: Partial<UserProfile>) => Promise<void>;
   currentScreen: CurrentScreen;
   setCurrentScreen: (screen: CurrentScreen) => void;
   authScreen: AuthScreen;
@@ -79,6 +80,12 @@ interface AppContextType {
   moodHistory: { date: string; mood: Mood }[];
   streak: number;
   updateMood: (mood: Mood) => Promise<void>;
+  darkMode: boolean;
+  setDarkMode: (val: boolean) => void;
+  pendingMessage: string | null;
+  setPendingMessage: (msg: string | null) => void;
+  pendingSessionId: string | null;
+  setPendingSessionId: (id: string | null) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -87,13 +94,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     initDatabase();
     seedDatabase();
+    // Load persisted dark mode preference
+    AsyncStorage.getItem('darkMode').then(val => {
+      if (val !== null) setDarkModeState(JSON.parse(val));
+    });
   }, []);
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [currentScreen, setCurrentScreen] = useState<CurrentScreen>("onboarding");
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const [authScreen, setAuthScreen] = useState<AuthScreen>("welcome");
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false); // Global loading state
+  const [darkMode, setDarkModeState] = useState(false); // Light mode by default
+
+  // Dark mode with persistence
+  const setDarkMode = async (val: boolean) => {
+    setDarkModeState(val);
+    await AsyncStorage.setItem('darkMode', JSON.stringify(val));
+  };
+
+  // Update profile with local persistence (preferences survive app restart)
+  const updateProfile = async (data: Partial<UserProfile>) => {
+    if (!profile) return;
+    const newProfile = { ...profile, ...data };
+    setProfile(newProfile);
+    console.log('[updateProfile] Saving profile locally...', JSON.stringify(data.preferences));
+    // Save full profile to cache
+    await AsyncStorage.setItem('user_profile_cache', JSON.stringify(newProfile));
+    // Save preferences separately as local override (survives backend sync)
+    if (data.preferences) {
+      await AsyncStorage.setItem('local_preferences', JSON.stringify(data.preferences));
+      console.log('[updateProfile] local_preferences saved to AsyncStorage');
+    }
+    // Try to sync with backend
+    try {
+      const backendData: any = {};
+      if (data.preferences) backendData.preferences = data.preferences;
+      if (data.name) backendData.full_name = data.name;
+      console.log('[updateProfile] Syncing to backend (PUT /users/me):', JSON.stringify(backendData));
+      await authService.updateProfile(backendData);
+      console.log('[updateProfile] Backend sync successful');
+    } catch (e: any) {
+      console.log('[updateProfile] Backend sync failed:', e?.response?.status, e?.message);
+    }
+  };
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -175,37 +221,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = await AsyncStorage.getItem("user_token");
+        // 1. Load cached profile for instant startup
+        const cachedProfile = await AsyncStorage.getItem('user_profile_cache');
+        console.log('[checkAuth] cachedProfile exists:', !!cachedProfile);
+        if (cachedProfile) {
+          setProfile(JSON.parse(cachedProfile));
+          setCurrentScreen('dashboard');
+        }
+
+        const token = await AsyncStorage.getItem('user_token');
+        console.log('[checkAuth] token exists:', !!token);
         if (token) {
-          // Verify token or get profile
+          // 2. Get fresh profile from backend
           const userData = await authService.getProfile();
-          // Map backend user to local profile structure
-          setProfile({
+          console.log('[checkAuth] backend prefs:', JSON.stringify(userData.preferences));
+
+          // 3. Load local preferences override (these are authoritative)
+          const localPrefsJson = await AsyncStorage.getItem('local_preferences');
+          const localPrefs = localPrefsJson ? JSON.parse(localPrefsJson) : null;
+          console.log('[checkAuth] local_preferences:', localPrefsJson);
+
+          // 4. Build profile, with local prefs taking priority over backend
+          const mergedPrefs = localPrefs || userData.preferences;
+          console.log('[checkAuth] using prefs:', JSON.stringify(mergedPrefs));
+          const freshProfile = {
             id: userData.id,
             name: userData.full_name || userData.username,
             email: userData.email,
             language: userData.language as any,
-            preferences: userData.preferences,
+            preferences: mergedPrefs,
             createdAt: userData.created_at
-          });
-          setCurrentScreen("dashboard");
+          };
+          setProfile(freshProfile);
+          await AsyncStorage.setItem('user_profile_cache', JSON.stringify(freshProfile));
+
+          if (!cachedProfile) setCurrentScreen('dashboard');
         }
       } catch (e) {
-        console.log("Auth check failed", e);
-        // Token invalid or expired
-        await AsyncStorage.removeItem("user_token");
+        console.log('Auth check failed', e);
+        // Don't remove token on network error
       }
     };
     const loadData = async () => {
       try {
-        const savedMoods = await AsyncStorage.getItem("mood_history");
+        const savedMoods = await AsyncStorage.getItem('mood_history');
         if (savedMoods) {
           const history = JSON.parse(savedMoods);
           setMoodHistory(history);
           setStreak(calculateStreak(history));
         }
       } catch (e) {
-        console.error("Failed to load mood history", e);
+        console.error('Failed to load mood history', e);
       }
     };
     loadData();
@@ -216,18 +282,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       const data = await authService.login(email, pass);
-      await AsyncStorage.setItem("user_token", data.access_token);
+      await AsyncStorage.setItem('user_token', data.access_token);
 
       const user = data.user;
-      setProfile({
+
+      // Load local preferences override if any
+      const localPrefsJson = await AsyncStorage.getItem('local_preferences');
+      const localPrefs = localPrefsJson ? JSON.parse(localPrefsJson) : null;
+
+      const newProfile = {
         id: user.id,
         name: user.full_name || user.username,
         email: user.email,
         language: user.language as any,
-        preferences: user.preferences,
+        preferences: localPrefs || user.preferences,
         createdAt: user.created_at
-      });
-      setCurrentScreen("dashboard");
+      };
+      setProfile(newProfile);
+      await AsyncStorage.setItem('user_profile_cache', JSON.stringify(newProfile));
+      setCurrentScreen('dashboard');
     } catch (e) {
       throw e;
     } finally {
@@ -251,9 +324,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await AsyncStorage.removeItem("user_token");
+    await AsyncStorage.removeItem('user_token');
+    await AsyncStorage.removeItem('user_profile_cache');
+    await AsyncStorage.removeItem('local_preferences');
     setProfile(null);
-    setAuthScreen("welcome");
+    setAuthScreen('welcome');
   };
 
   function addSession(session: Session) {
@@ -265,6 +340,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         profile,
         setProfile,
+        updateProfile,
         currentScreen,
         setCurrentScreen,
         authScreen,
@@ -283,6 +359,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         moodHistory,
         streak,
         updateMood,
+        darkMode,
+        setDarkMode,
+        pendingMessage,
+        setPendingMessage,
+        pendingSessionId,
+        setPendingSessionId,
       }}
     >
       {children}

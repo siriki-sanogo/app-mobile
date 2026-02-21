@@ -14,30 +14,53 @@ import { MOOD_ICONS } from "@/constants/data";
 import { useTranslation } from "../contexte/i18n";
 
 export default function HistoryScreen() {
-  const { sessions, profile, refreshSessions } = useAppContext();
+  const { sessions, profile, refreshSessions, setCurrentScreen, setPendingSessionId } = useAppContext();
   const t = useTranslation(profile?.language || "fr");
+  const lang = profile?.language || "fr";
 
   React.useEffect(() => {
     refreshSessions();
   }, []);
 
+  const formatDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 0) return lang === 'en' ? 'Today' : "Aujourd'hui";
+      if (diffDays === 1) return lang === 'en' ? 'Yesterday' : 'Hier';
+      if (diffDays < 7) return lang === 'en' ? `${diffDays} days ago` : `Il y a ${diffDays} jours`;
+
+      return date.toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR', {
+        day: 'numeric', month: 'short', year: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const handleOpenSession = (sessionId: string) => {
+    setPendingSessionId(sessionId);
+    setCurrentScreen("assistant");
+  };
+
   const renderSession = ({ item }: any) => (
-    <View style={styles.sessionCard}>
+    <TouchableOpacity style={styles.sessionCard} onPress={() => handleOpenSession(item.id)}>
       <View style={styles.sessionHeader}>
         <View style={styles.sessionInfo}>
           <Text style={styles.sessionDate}>
-            {profile?.language === 'en' ? (item.date_en || item.date) : (item.date_fr || item.date)}
+            {formatDate(item.date)}
           </Text>
-          <Text style={styles.sessionQuestion}>
-            {profile?.language === 'en' ? (item.question_en || item.question) : (item.question_fr || item.question)}
+          <Text style={styles.sessionQuestion} numberOfLines={2}>
+            {item.question || (lang === 'en' ? 'Conversation' : 'Conversation')}
           </Text>
         </View>
-        <Text style={styles.moodIcon}>{MOOD_ICONS[item.mood]}</Text>
+        <Text style={styles.moodIcon}>{MOOD_ICONS[item.mood] || "💬"}</Text>
       </View>
-      <TouchableOpacity style={styles.viewButton}>
-        <Text style={styles.viewButtonText}>{t("view_conversation")} →</Text>
-      </TouchableOpacity>
-    </View>
+      <Text style={styles.viewButtonText}>{t("view_conversation")} →</Text>
+    </TouchableOpacity>
   );
 
   return (

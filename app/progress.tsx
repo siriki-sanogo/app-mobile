@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from "react-native";
+import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAppContext } from "../contexte/AppContext";
 
 import { useTranslation } from "../contexte/i18n";
@@ -9,9 +9,7 @@ const { width } = Dimensions.get("window");
 const IS_LARGE_SCREEN = width >= 768;
 
 export default function ProgressScreen() {
-  const colorScheme = useColorScheme();
-  const darkMode = colorScheme === "dark";
-  const { setCurrentScreen, profile, streak, moodHistory, sessions } = useAppContext();
+  const { setCurrentScreen, profile, streak, moodHistory, sessions, darkMode } = useAppContext();
   const t = useTranslation(profile?.language || "fr");
 
   // Real Data from Context

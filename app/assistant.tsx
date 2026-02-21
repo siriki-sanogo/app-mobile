@@ -19,12 +19,13 @@ import { useLocalSearchParams } from "expo-router";
 
 import { useAppContext } from "../contexte/AppContext";
 import { useTranslation } from "../contexte/i18n";
-import { createSession, saveMessage } from "../services/database";
+import { createSession, saveMessage, loadMessages } from "../services/database";
 
 import { useNetInfo } from "@react-native-community/netinfo";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useVoiceRecording } from "../hooks/useVoiceRecording";
 import { fetchAIResponse, audioService } from "../services/api";
+import { generatePositiveContent } from "../services/llm";
 import { generateOfflineResponse } from "../utils/offlineAI";
 import { speechService } from "../services/speechService";
 import VoicePlayer from "../components/VoicePlayer";
@@ -33,7 +34,7 @@ const { width } = Dimensions.get("window");
 const IS_LARGE_SCREEN = width >= 768;
 
 export default function AssistantScreen() {
-  const { messages, setMessages, setCurrentScreen, profile } = useAppContext(); // Get profile
+  const { messages, setMessages, setCurrentScreen, profile, pendingMessage, setPendingMessage, pendingSessionId, setPendingSessionId } = useAppContext();
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
@@ -46,13 +47,17 @@ export default function AssistantScreen() {
   // Integrate Native Voice Recording
   const {
     isRecording,
+    recordingUri,
+    recordingDuration,
     startRecording,
     stopRecording,
+    clearRecording,
   } = useVoiceRecording();
 
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [autoSpeak, setAutoSpeak] = useState(false);
 
   const netInfo = useNetInfo();
 
@@ -70,18 +75,37 @@ export default function AssistantScreen() {
   const insets = useSafeAreaInsets();
   const { initialMessage } = useLocalSearchParams<{ initialMessage?: string }>();
   const initialProcessed = useRef(false);
+  const sessionIdRef = useRef<string>(Crypto.randomUUID());
+  const sessionCreatedRef = useRef(false);
 
+  // Load messages from a past session if navigating from history
   useEffect(() => {
-    if (initialMessage && !initialProcessed.current) {
-      initialProcessed.current = true;
-      // We need to wait a bit for the component to mount and then trigger send
-      setTimeout(() => {
-        setInputText(initialMessage);
-        // We can't call handleSend directly here because it's defined below.
-        // Let's use a trigger state or move handleSend up.
-      }, 500);
+    if (pendingSessionId) {
+      const loadSession = async () => {
+        try {
+          const storedMessages = await loadMessages(pendingSessionId);
+          if (storedMessages && storedMessages.length > 0) {
+            const mapped = (storedMessages as any[]).map((m: any) => ({
+              id: m.id,
+              type: m.role === 'user' ? 'user' as const : 'assistant' as const,
+              text: m.content,
+              timestamp: m.timestamp,
+              helpful: null,
+            }));
+            setMessages(mapped);
+          }
+          sessionIdRef.current = pendingSessionId;
+          sessionCreatedRef.current = true;
+        } catch (e) {
+          console.error('Failed to load session messages', e);
+        }
+        setPendingSessionId(null);
+      };
+      loadSession();
     }
-  }, [initialMessage]);
+  }, [pendingSessionId]);
+
+  // initialMessage is handled by the useEffect below handleSend (line ~224)
 
   const handleActionPress = (action: string, messageId: string) => {
     if (action === "navigate:exercises") {
@@ -134,8 +158,12 @@ export default function AssistantScreen() {
     const userText = textToUse;
     if (!overrideText) setInputText("");
 
-    const sessionId = "session_default";
-    await createSession({ id: sessionId, title: "Conversation", created_at: new Date().toISOString() });
+    const sessionId = sessionIdRef.current;
+    const sessionTitle = userText || (currentLanguage === "en" ? "Voice conversation" : "Conversation vocale");
+    if (!sessionCreatedRef.current) {
+      await createSession({ id: sessionId, title: sessionTitle, created_at: new Date().toISOString() });
+      sessionCreatedRef.current = true;
+    }
 
     const userMsg = {
       id: Crypto.randomUUID(),
@@ -152,18 +180,53 @@ export default function AssistantScreen() {
     try {
       let finalPrompt = userText;
 
-      // If it's a voice message, we might need to transcribe it first
+      // If it's a voice message, we need to transcribe it first
       if (audioUri && !userText) {
         setIsTranscribing(true);
         try {
-          const transcriptionResult = await audioService.transcribe(audioUri);
-          finalPrompt = transcriptionResult.text;
+          let transcriptionText = "";
 
-          // Update message text with transcription
-          setMessages((prev: any[]) => prev.map(m => m.id === userMsg.id ? { ...m, text: finalPrompt, status: "sent" } : m));
+          if (netInfo.isConnected !== false) {
+            // Mode Online (API Serveur)
+            console.log("🌐 Transcription Online");
+            const res = await audioService.transcribe(audioUri);
+            transcriptionText = res.text;
+          } else {
+            // Mode Offline (Whisper Local)
+            console.log("✈️ Transcription Offline (Whisper)");
+            const { transcribeAudioOffline } = require('../services/offlineSTT');
+            const res = await transcribeAudioOffline(audioUri);
+            transcriptionText = res.text;
+          }
+
+          if (transcriptionText && transcriptionText.trim().length > 0) {
+            finalPrompt = transcriptionText;
+            // Update message text with transcription
+            setMessages((prev: any[]) => prev.map(m => m.id === userMsg.id ? { ...m, text: finalPrompt, status: "sent" } : m));
+          } else {
+            throw new Error("Empty transcription");
+          }
         } catch (err) {
           console.error("Transcription error", err);
-          finalPrompt = "[Audio non transcrit]";
+          // Update the voice message to show it wasn't transcribed
+          setMessages((prev: any[]) => prev.map(m => m.id === userMsg.id
+            ? { ...m, text: currentLanguage === "en" ? "🎤 Voice message (not transcribed)" : "🎤 Message vocal (non transcrit)", status: "error" }
+            : m));
+
+          // Show honest error instead of faking a response
+          const errorMessage = {
+            id: Date.now().toString() + "-a",
+            type: "assistant" as const,
+            text: currentLanguage === "en"
+              ? "I'm sorry, I couldn't hear your voice message. The transcription service is unavailable. Could you try typing your message instead?"
+              : "Désolé, je n'ai pas pu écouter votre message vocal. Le service de transcription n'est pas disponible. Pouvez-vous essayer d'écrire votre message ?",
+            timestamp: new Date().toISOString(),
+            helpful: null,
+          };
+          setMessages((prev: any[]) => [...prev, errorMessage]);
+          setIsTyping(false);
+          setIsTranscribing(false);
+          return; // Stop here — don't send to AI
         } finally {
           setIsTranscribing(false);
         }
@@ -178,14 +241,36 @@ export default function AssistantScreen() {
         timestamp: userMsg.timestamp
       });
 
-      let response = null;
-      if (netInfo.isConnected !== false) {
-        response = await fetchAIResponse(finalPrompt || "...", profile, currentLanguage);
+      // 1. Build conversation history from current messages
+      const conversationHistory = messages
+        .filter((m: any) => m.type === "user" || m.type === "assistant")
+        .map((m: any) => ({
+          role: m.type === "user" ? "user" as const : "assistant" as const,
+          content: m.text || "",
+        }));
+
+      // 2. Smart AI response: Groq (online) → mockGenerate with mood classifier (offline)
+      //    generatePositiveContent handles the full fallback chain:
+      //    Groq API → Native Llama (Android) → mockGenerate (mood + topic + RAG)
+      let aiText = "";
+      try {
+        const llmResponse = await generatePositiveContent(finalPrompt || "...", conversationHistory, profile, currentLanguage);
+        if (llmResponse && llmResponse.response && llmResponse.response.length > 10) {
+          aiText = llmResponse.response;
+        }
+      } catch (e) {
+        console.log("LLM engine failed, using keyword fallback");
       }
 
-      if (!response) {
-        response = await generateOfflineResponse(finalPrompt || "...", profile, currentLanguage);
+      // 3. Last resort: keyword-based offline engine
+      if (!aiText) {
+        const offlineResponse = await generateOfflineResponse(finalPrompt || "...", profile, currentLanguage);
+        aiText = offlineResponse.text;
       }
+
+      const response = {
+        text: aiText,
+      };
 
       const assistantMessage = {
         id: Date.now().toString() + "-a",
@@ -193,11 +278,38 @@ export default function AssistantScreen() {
         text: response.text,
         timestamp: new Date().toISOString(),
         helpful: null,
-        actions: response.actions
       };
 
       setMessages((prev: any[]) => [...prev, assistantMessage]);
       HapticFeedback.notificationAsync(HapticFeedback.NotificationFeedbackType.Success);
+
+      // Save assistant response to DB for history
+      await saveMessage({
+        id: assistantMessage.id,
+        session_id: sessionId,
+        role: "assistant",
+        content: response.text,
+        timestamp: assistantMessage.timestamp
+      });
+
+      // Auto-speak if toggle is on
+      if (autoSpeak) {
+        setTimeout(async () => {
+          try {
+            setIsSpeaking(true);
+            setSpeakingMessageId(assistantMessage.id);
+            await speechService.speak(response.text, {
+              language: currentLanguage as 'fr' | 'en',
+              rate: 0.95,
+            });
+            setIsSpeaking(false);
+            setSpeakingMessageId(null);
+          } catch (e) {
+            setIsSpeaking(false);
+            setSpeakingMessageId(null);
+          }
+        }, 300);
+      }
     } catch (error) {
       console.error("AI Error", error);
     } finally {
@@ -215,6 +327,17 @@ export default function AssistantScreen() {
       }, 800);
     }
   }, [initialMessage]);
+
+  // Handle pending message from dashboard suggestion cards
+  useEffect(() => {
+    if (pendingMessage) {
+      const msg = pendingMessage;
+      setPendingMessage(null);
+      setTimeout(() => {
+        handleSend(msg);
+      }, 800);
+    }
+  }, [pendingMessage]);
 
   // Dynamic Default Message Translation
   useEffect(() => {
@@ -235,13 +358,49 @@ export default function AssistantScreen() {
 
   const handleMicPress = async () => {
     if (isRecording) {
-      const uri = await stopRecording();
-      if (uri) {
-        handleSend(undefined, uri);
-      }
+      // Stop recording → enters preview mode (recordingUri will be set)
+      await stopRecording();
+    } else if (recordingUri) {
+      // Already in preview mode, pressing mic again clears it
+      clearRecording();
     } else {
       await startRecording();
     }
+  };
+
+  // Send the recorded voice note
+  const handleSendVoice = () => {
+    if (recordingUri) {
+      handleSend(undefined, recordingUri);
+      clearRecording();
+    }
+  };
+
+  // Discard the recorded voice note
+  const handleDeleteVoice = () => {
+    clearRecording();
+  };
+
+  // Start a brand new conversation
+  const handleNewChat = () => {
+    HapticFeedback.impactAsync(HapticFeedback.ImpactFeedbackStyle.Medium);
+    sessionIdRef.current = Crypto.randomUUID();
+    sessionCreatedRef.current = false;
+    setMessages([{
+      id: "1",
+      type: "assistant" as const,
+      text: currentLanguage === "en" ? "Hello! How can I assist you today?" : "Bonjour ! Comment puis-je vous accompagner aujourd'hui ?",
+      timestamp: new Date().toISOString(),
+      helpful: null,
+    }]);
+    setInputText("");
+  };
+
+  // Format seconds to MM:SS
+  const formatDuration = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
   return (
@@ -270,16 +429,34 @@ export default function AssistantScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.audioButton, isSpeaking && { backgroundColor: 'rgba(34, 197, 94, 0.2)' }]}
+          style={[styles.audioButton, autoSpeak && { backgroundColor: 'rgba(34, 197, 94, 0.2)' }]}
           onPress={async () => {
-            if (isSpeaking) {
-              await speechService.stop();
-              setIsSpeaking(false);
-              setSpeakingMessageId(null);
+            if (autoSpeak) {
+              // Turn off auto-speak and stop any current speech
+              setAutoSpeak(false);
+              if (isSpeaking) {
+                await speechService.stop();
+                setIsSpeaking(false);
+                setSpeakingMessageId(null);
+              }
+            } else {
+              // Turn on auto-speak
+              setAutoSpeak(true);
+              HapticFeedback.impactAsync(HapticFeedback.ImpactFeedbackStyle.Light);
             }
           }}
         >
-          <Feather name={isSpeaking ? "volume-x" : "volume-2"} size={24} color={isSpeaking ? "#22C55E" : "#F97316"} />
+          <Feather name={autoSpeak ? "volume-2" : "volume-x"} size={24} color={autoSpeak ? "#22C55E" : "#9CA3AF"} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.audioButton}
+          onPress={handleNewChat}
+          // @ts-ignore - title works on web for tooltip
+          title={currentLanguage === 'en' ? 'New conversation' : 'Nouvelle discussion'}
+          accessibilityLabel={currentLanguage === 'en' ? 'New conversation' : 'Nouvelle discussion'}
+        >
+          <Feather name="edit" size={22} color="#F97316" />
         </TouchableOpacity>
       </View>
 
@@ -305,7 +482,7 @@ export default function AssistantScreen() {
                     </View>
                   )}
 
-                  <View style={{ alignItems: isUser ? 'flex-end' : 'flex-start', maxWidth: "85%" }}>
+                  <View style={{ alignItems: isUser ? 'flex-end' : 'flex-start', maxWidth: "95%" }}>
                     <View style={[
                       styles.bubble,
                       isUser ? styles.bubbleUser : styles.bubbleAssistant
@@ -324,27 +501,7 @@ export default function AssistantScreen() {
                       ]}>
                         {msg.text}
                       </Text>
-                      {/* TTS Button for assistant messages */}
-                      {!isUser && msg.text && (
-                        <TouchableOpacity
-                          style={styles.speakButton}
-                          onPress={() => handleSpeak(msg.text, msg.id)}
-                        >
-                          <Feather
-                            name={speakingMessageId === msg.id ? "volume-x" : "volume-2"}
-                            size={16}
-                            color={speakingMessageId === msg.id ? "#22C55E" : "#9CA3AF"}
-                          />
-                          <Text style={[
-                            styles.speakButtonText,
-                            speakingMessageId === msg.id && { color: '#22C55E' }
-                          ]}>
-                            {speakingMessageId === msg.id
-                              ? (currentLanguage === 'en' ? 'Stop' : 'Stop')
-                              : (currentLanguage === 'en' ? 'Listen' : 'Écouter')}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
+
                     </View>
 
                     {/* Render Actions if present */}
@@ -398,41 +555,86 @@ export default function AssistantScreen() {
 
         {/* FOOTER INPUT */}
         <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <TextInput
-            style={styles.input}
-            placeholder={isRecording ? (currentLanguage === "en" ? "Recording..." : "Enregistrement...") : t("messagePlaceholder")}
-            placeholderTextColor="#9CA3AF"
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-            editable={!isRecording}
-          />
 
-          <TouchableOpacity
-            style={[
-              styles.iconButton,
-              isRecording && { backgroundColor: "#FEE2E2", borderColor: "#EF4444" }
-            ]}
-            onPress={handleMicPress}
-          >
-            <Feather
-              name={isRecording ? "mic-off" : "mic"}
-              size={22}
-              color={isRecording ? "#EF4444" : "#6B7280"}
-            />
-          </TouchableOpacity>
+          {/* STATE 1: Recording in progress — show timer + stop button */}
+          {isRecording && (
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444', marginRight: 8 }} />
+                <Text style={{ fontSize: 18, fontWeight: '600', color: '#EF4444', fontVariant: ['tabular-nums'] }}>
+                  {formatDuration(recordingDuration)}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.iconButton, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}
+                onPress={handleMicPress}
+              >
+                <Feather name="square" size={20} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          )}
 
-          <TouchableOpacity
-            style={[styles.sendButton, (!inputText.trim() && !isRecording) && styles.sendButtonDisabled]}
-            onPress={() => handleSend()}
-            disabled={!inputText.trim() && !isRecording}
-          >
-            <Feather name="send" size={24} color="white" />
-          </TouchableOpacity>
+          {/* STATE 2: Preview mode — show duration + playback + send/delete */}
+          {!isRecording && recordingUri && (
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity
+                style={[styles.iconButton, { borderColor: '#EF4444' }]}
+                onPress={handleDeleteVoice}
+              >
+                <Feather name="trash-2" size={20} color="#EF4444" />
+              </TouchableOpacity>
+
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: 8 }}>
+                <Feather name="mic" size={18} color="#10B981" style={{ marginRight: 6 }} />
+                <Text style={{ fontSize: 16, fontWeight: '600', color: '#1F2937', fontVariant: ['tabular-nums'] }}>
+                  {formatDuration(recordingDuration)}
+                </Text>
+                <Text style={{ marginLeft: 8, fontSize: 13, color: '#6B7280' }}>
+                  {currentLanguage === 'en' ? 'Voice note ready' : 'Note vocale prête'}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.sendButton}
+                onPress={handleSendVoice}
+              >
+                <Feather name="send" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* STATE 3: Normal text input */}
+          {!isRecording && !recordingUri && (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder={t("messagePlaceholder")}
+                placeholderTextColor="#9CA3AF"
+                value={inputText}
+                onChangeText={setInputText}
+                multiline
+              />
+
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={handleMicPress}
+              >
+                <Feather name="mic" size={22} color="#6B7280" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+                onPress={() => handleSend()}
+                disabled={!inputText.trim()}
+              >
+                <Feather name="send" size={24} color="white" />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
-      </KeyboardAvoidingView>
-    </View>
+      </KeyboardAvoidingView >
+    </View >
   );
 }
 
@@ -526,7 +728,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   bubble: {
-    maxWidth: IS_LARGE_SCREEN ? "80%" : "90%",
     padding: 16,
     borderRadius: 20,
   },

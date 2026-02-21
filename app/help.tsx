@@ -1,13 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme, LayoutAnimation } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, LayoutAnimation } from "react-native";
 import { useAppContext } from "../contexte/AppContext";
 import { useTranslation } from "../contexte/i18n";
 
 export default function HelpScreen() {
-    const { profile, setCurrentScreen } = useAppContext();
-    const colorScheme = useColorScheme();
-    const darkMode = colorScheme === "dark";
+    const { profile, setCurrentScreen, darkMode } = useAppContext();
     const t = useTranslation(profile?.language || "fr");
 
     const faqs = [

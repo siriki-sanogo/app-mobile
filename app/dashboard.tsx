@@ -18,8 +18,8 @@ import {
   Text,
   TouchableOpacity,
   View,
-  useColorScheme,
   StatusBar,
+  Modal,
 } from "react-native";
 import { useAppContext } from "../contexte/AppContext";
 import { useTranslation } from "../contexte/i18n";
@@ -28,13 +28,12 @@ const { width, height } = Dimensions.get("window");
 const IS_LARGE_SCREEN = width >= 768;
 
 export default function DashboardScreen() {
-  const { profile, setProfile, sessions, updateMood } = useAppContext();
+  const { profile, setProfile, sessions, updateMood, darkMode, setCurrentScreen, setPendingMessage, currentScreen } = useAppContext();
   const router = useRouter();
-  const colorScheme = useColorScheme();
-  const darkMode = colorScheme === "dark";
 
   const t = useTranslation(profile?.language || "fr");
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
+  const [selectedCard, setSelectedCard] = useState<any>(null);
 
   // Mood Effects
   const [showConfetti, setShowConfetti] = useState(false);
@@ -99,7 +98,7 @@ export default function DashboardScreen() {
 
     // 3. Keep top 6
     setDisplayedCards(shuffled.slice(0, 6));
-  }, [prefs.show_bible, prefs.show_coran, prefs.show_african, profile?.objectives]);
+  }, [prefs.show_bible, prefs.show_coran, prefs.show_african, profile?.objectives, currentScreen]);
 
   const triggerFeedback = (message: string, isPositive: boolean) => {
     // Reset
@@ -147,11 +146,7 @@ export default function DashboardScreen() {
   };
 
   const handleSuggestionPress = (card: any) => {
-    const text = currentLanguage === "en" ? card.title_en : card.title;
-    router.push({
-      pathname: "/assistant",
-      params: { initialMessage: text }
-    } as any);
+    setSelectedCard(card);
   };
 
   return (
@@ -172,74 +167,82 @@ export default function DashboardScreen() {
       >
         {/* Header */}
         <Animated.View style={[styles.headerSection, { opacity: headerOpacity }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.title, darkMode ? { color: "#F9FAFB" } : { color: "#111827" }]}>
-              {t("greeting")} <Text style={{ color: "#3B82F6" }}>{userName}</Text> 👋
+          {/* Row 1: Greeting + Buttons */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+            <Text style={[styles.title, darkMode ? { color: "#F9FAFB" } : { color: "#111827" }, { fontSize: 22 }]}>
+              {t("greeting")} 👋
             </Text>
-            <Text
-              style={[
-                styles.subtitle,
-                darkMode ? { color: "#9CA3AF" } : { color: "#4B5563" },
-              ]}
-            >
-              {t("moodQuestion")}
-            </Text>
-          </View>
 
-          {/* Boutons en haut à droite */}
-          <View style={styles.headerButtons}>
-            {/* Bouton Langue */}
-            <TouchableOpacity
-              style={[
-                styles.headerButton,
-                darkMode
-                  ? { backgroundColor: "rgba(31, 41, 55, 0.8)", borderColor: "rgba(55, 65, 81, 0.5)" }
-                  : { backgroundColor: "rgba(255, 255, 255, 0.9)", borderColor: "rgba(229, 231, 235, 0.5)" },
-              ]}
-              onPress={handleLanguageChange}
-              activeOpacity={0.7}
-            >
-              <Feather
-                name="globe"
-                size={18}
-                color={darkMode ? "#E5E7EB" : "#1F2937"}
-              />
-              <Text
+            {/* Boutons en haut à droite */}
+            <View style={styles.headerButtons}>
+              {/* Bouton Langue */}
+              <TouchableOpacity
                 style={[
-                  styles.headerButtonText,
-                  darkMode ? { color: "#E5E7EB" } : { color: "#1F2937" },
+                  styles.headerButton,
+                  darkMode
+                    ? { backgroundColor: "rgba(31, 41, 55, 0.8)", borderColor: "rgba(55, 65, 81, 0.5)" }
+                    : { backgroundColor: "rgba(255, 255, 255, 0.9)", borderColor: "rgba(229, 231, 235, 0.5)" },
                 ]}
+                onPress={handleLanguageChange}
+                activeOpacity={0.7}
               >
-                {currentLanguage.toUpperCase()}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Bouton Profil */}
-            <TouchableOpacity
-              style={[
-                styles.headerButton,
-                darkMode
-                  ? { backgroundColor: "rgba(31, 41, 55, 0.8)", borderColor: "rgba(55, 65, 81, 0.5)" }
-                  : { backgroundColor: "rgba(255, 255, 255, 0.9)", borderColor: "rgba(229, 231, 235, 0.5)" },
-                styles.profileButton
-              ]}
-              onPress={handleProfilePress}
-              activeOpacity={0.7}
-            >
-              {profile?.photoUri ? (
-                <Image
-                  source={{ uri: profile.photoUri }}
-                  style={styles.profileImage}
-                />
-              ) : (
                 <Feather
-                  name="user"
+                  name="globe"
                   size={18}
                   color={darkMode ? "#E5E7EB" : "#1F2937"}
                 />
-              )}
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.headerButtonText,
+                    darkMode ? { color: "#E5E7EB" } : { color: "#1F2937" },
+                  ]}
+                >
+                  {currentLanguage.toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Bouton Profil */}
+              <TouchableOpacity
+                style={[
+                  styles.headerButton,
+                  darkMode
+                    ? { backgroundColor: "rgba(31, 41, 55, 0.8)", borderColor: "rgba(55, 65, 81, 0.5)" }
+                    : { backgroundColor: "rgba(255, 255, 255, 0.9)", borderColor: "rgba(229, 231, 235, 0.5)" },
+                  styles.profileButton
+                ]}
+                onPress={handleProfilePress}
+                activeOpacity={0.7}
+              >
+                {profile?.photoUri ? (
+                  <Image
+                    source={{ uri: profile.photoUri }}
+                    style={styles.profileImage}
+                  />
+                ) : (
+                  <Feather
+                    name="user"
+                    size={18}
+                    color={darkMode ? "#E5E7EB" : "#1F2937"}
+                  />
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
+
+          {/* Row 2: User Name */}
+          <Text style={[styles.title, { color: "#3B82F6", marginBottom: 2 }]} numberOfLines={1} adjustsFontSizeToFit>
+            {userName}
+          </Text>
+
+          {/* Row 3: Subtitle */}
+          <Text
+            style={[
+              styles.subtitle,
+              darkMode ? { color: "#9CA3AF" } : { color: "#4B5563" },
+            ]}
+          >
+            {t("moodQuestion")}
+          </Text>
         </Animated.View>
 
         {/* Serenity Garden (NEW) */}
@@ -392,6 +395,78 @@ export default function DashboardScreen() {
           </Text>
         </Animated.View>
       )}
+
+      {/* Detail Modal */}
+      <Modal
+        visible={!!selectedCard}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedCard(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+          <View style={{
+            backgroundColor: darkMode ? "#1F2937" : "white",
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            padding: 24,
+            paddingBottom: 40,
+            maxHeight: "80%",
+          }}>
+            {/* Handle bar */}
+            <View style={{ alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: darkMode ? "#4B5563" : "#D1D5DB", marginBottom: 20 }} />
+
+            {/* Close button */}
+            <TouchableOpacity
+              onPress={() => setSelectedCard(null)}
+              style={{ position: "absolute", top: 16, right: 16, zIndex: 1, padding: 8 }}
+            >
+              <Feather name="x" size={22} color={darkMode ? "#9CA3AF" : "#6B7280"} />
+            </TouchableOpacity>
+
+            {/* Emoji */}
+            <View style={{ alignSelf: "center", width: 64, height: 64, borderRadius: 18, backgroundColor: darkMode ? "#374151" : "#F3F4F6", justifyContent: "center", alignItems: "center", marginBottom: 16 }}>
+              <Text style={{ fontSize: 32 }}>{selectedCard?.emoji}</Text>
+            </View>
+
+            {/* Title */}
+            <Text style={{ fontSize: 20, fontWeight: "800", color: darkMode ? "#F9FAFB" : "#111827", textAlign: "center", marginBottom: 8 }}>
+              {currentLanguage === "en" ? selectedCard?.title_en : selectedCard?.title}
+            </Text>
+
+            {/* Source badge */}
+            <View style={{ alignSelf: "center", backgroundColor: darkMode ? "#374151" : "#F0F5FF", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, marginBottom: 20 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#3B82F6" }}>
+                {selectedCard?.source === "bible" ? "📖 Bible" : selectedCard?.source === "coran" ? "📚 Coran" : "🌍 Textes africains"}
+                {selectedCard?.reference ? " • " + selectedCard.reference : ""}
+              </Text>
+            </View>
+
+            {/* Full text */}
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+              <Text style={{ fontSize: 16, lineHeight: 26, color: darkMode ? "#D1D5DB" : "#374151", textAlign: "center", fontStyle: "italic" }}>
+                {`"${currentLanguage === "en" ? selectedCard?.fullText_en : selectedCard?.fullText}"`}
+              </Text>
+            </ScrollView>
+
+            {/* Discuss button */}
+            <TouchableOpacity
+              style={{ backgroundColor: "#3B82F6", borderRadius: 16, height: 52, justifyContent: "center", alignItems: "center", marginTop: 20, flexDirection: "row", gap: 8 }}
+              onPress={() => {
+                const text = currentLanguage === "en" ? selectedCard?.title_en : selectedCard?.title;
+                setSelectedCard(null);
+                // Set pending message and navigate to assistant
+                setPendingMessage(text);
+                setCurrentScreen("assistant");
+              }}
+            >
+              <Feather name="message-circle" size={18} color="white" />
+              <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>
+                {currentLanguage === "en" ? "Discuss with AI" : "Discuter avec l'IA"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -404,9 +479,7 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     marginBottom: 32,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+    flexDirection: "column",
   },
   headerButtons: {
     flexDirection: "row",

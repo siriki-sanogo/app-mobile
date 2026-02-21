@@ -59,7 +59,7 @@ export default function WelcomeScreen() {
           </View>
           <View style={styles.featureItem}>
             <Feather name="check-circle" size={18} color="#F97316" />
-            <Text style={styles.featureText}>Fonctionnement 100% Offline</Text>
+            <Text style={styles.featureText}>Fonctionne même sans internet</Text>
           </View>
         </View>
       </View>

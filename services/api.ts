@@ -1,5 +1,6 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 import { API_URL } from "../constants/config";
 
 // --- Types ---
@@ -51,7 +52,7 @@ const api = axios.create({
         "Content-Type": "application/json",
         "ngrok-skip-browser-warning": "true", // Bypass ngrok free tier landing page
     },
-    timeout: 10000,
+    timeout: 30000, // 30s — LLM calls (Groq 70B) can take a few seconds
 });
 
 api.interceptors.request.use(
@@ -83,6 +84,10 @@ export const authService = {
         const response = await api.get("/users/me");
         return response.data;
     },
+    updateProfile: async (data: any) => {
+        const response = await api.put("/users/me", data);
+        return response.data;
+    },
 };
 
 export const syncServiceApi = {
@@ -102,23 +107,28 @@ export const syncServiceApi = {
 export const audioService = {
     transcribe: async (uri: string) => {
         const formData = new FormData();
-        // Extract filename from URI
-        const filename = uri.split("/").pop() || "recording.m4a";
-        const type = "audio/m4a"; // Default expo-av type is m4a
 
-        // @ts-ignore
-        formData.append("file", {
-            uri,
-            name: filename,
-            type,
-        });
+        if (Platform.OS === 'web') {
+            // Web: fetch the blob from the blob URL and create a proper File
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            const file = new File([blob], "recording.webm", { type: "audio/webm" });
+            formData.append("file", file);
+        } else {
+            // Native: use React Native FormData pattern
+            const filename = uri.split("/").pop() || "recording.m4a";
+            const type = "audio/m4a";
+            // @ts-ignore
+            formData.append("file", { uri, name: filename, type });
+        }
 
-        const response = await api.post("/audio/transcribe", formData, {
+        const res = await api.post("/audio/transcribe", formData, {
             headers: {
                 "Content-Type": "multipart/form-data",
             },
+            timeout: 30000, // Transcription can take time
         });
-        return response.data;
+        return res.data;
     },
 };
 
@@ -185,16 +195,26 @@ export const searchOnline = async (query: string, category?: string) => {
 // Import de notre nouveau service LLM offline
 import { generatePositiveContent } from "./llm";
 
-export const fetchAIResponse = async (prompt: string, profile: any, language: "fr" | "en") => {
-    // On utilise notre moteur IA (RAG + Mock/Llama)
-    const result = await generatePositiveContent(prompt);
+export const fetchAIResponse = async (
+    prompt: string,
+    profile: any,
+    language: "fr" | "en",
+    messagesHistory: { role: "user" | "assistant"; content: string }[] = []
+) => {
+    try {
+        // On utilise notre moteur IA (RAG + Groq/Llama) with conversation history
+        const result = await generatePositiveContent(prompt, messagesHistory, profile);
 
-    if (!result) return null;
+        if (!result) return null;
 
-    return {
-        text: result.response,
-        actions: [] // On pourra ajouter des actions basées sur l'humeur plus tard
-    };
+        return {
+            text: result.response,
+            actions: [],
+        };
+    } catch (e) {
+        console.log("fetchAIResponse failed:", e);
+        return null;
+    }
 };
 
 export default api;

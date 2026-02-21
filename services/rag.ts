@@ -1,10 +1,18 @@
 /**
- * RAG Service - Retrieval Augmented Generation avec TF-IDF
- * Recherche sémantique simplifiée pour contenus offline
+ * RAG Service - Retrieval Augmented Generation avec TF-IDF Vectoriel
+ * Recherche sémantique offline basée sur TF-IDF + Similarité Cosinus
+ * 
+ * Architecture:
+ * 1. Au premier appel, charge tous les documents depuis SQLite (lazy init)
+ * 2. Tokenize + calcule TF-IDF pour chaque document
+ * 3. Calcule l'IDF global sur le corpus
+ * 4. Pour chaque requête, calcule le vecteur TF-IDF et cherche par similarité cosinus
  */
-import { searchReligiousTexts, searchDictionary, searchProverbs } from "./database";
+import { getDB } from "./database";
 
-// Liste de mots vides (stop words) pour FR et EN
+// ================================================
+// STOP WORDS (FR + EN)
+// ================================================
 const STOP_WORDS = new Set([
     // French
     "le", "la", "les", "un", "une", "des", "du", "de", "d", "l",
@@ -18,6 +26,8 @@ const STOP_WORDS = new Set([
     "me", "te", "se", "y", "en", "moi", "toi", "lui",
     "ça", "cela", "ceci", "voici", "voilà",
     "être", "avoir", "faire", "dire", "aller", "voir", "venir",
+    "ne", "pas", "plus", "si", "tout", "tous", "toute", "toutes",
+    "au", "aux", "aussi",
     // English
     "the", "a", "an", "is", "are", "was", "were", "be", "been",
     "i", "you", "he", "she", "it", "we", "they",
@@ -27,15 +37,26 @@ const STOP_WORDS = new Set([
     "what", "which", "who", "whom", "how", "why", "where", "when",
     "to", "of", "in", "for", "on", "with", "at", "by", "from",
     "do", "does", "did", "have", "has", "had", "will", "would", "could", "should",
+    "not", "no", "also", "all", "been",
 ]);
 
-// Interface pour les documents indexés
+// ================================================
+// TYPES
+// ================================================
+
 interface IndexedDocument {
     id: string;
-    source: string;
-    content: string;
-    tokens: string[];
-    tfidf?: Map<string, number>;
+    source: string;        // 'bible', 'coran', 'proverbe', 'dictionnaire'
+    content: string;       // Texte brut original
+    tokens: string[];      // Tokens nettoyés
+    tfidf: Map<string, number>; // Vecteur TF-IDF pré-calculé
+    // Métadonnées optionnelles
+    book?: string;
+    chapter?: number;
+    verse?: number;
+    author?: string;
+    word?: string;
+    language?: string;
 }
 
 interface RAGResult {
@@ -46,51 +67,48 @@ interface RAGResult {
     book?: string;
     chapter?: number;
     verse?: number;
-}
-
-interface ReligiousTextResult {
-    source: string;
-    book: string;
-    chapter: number;
-    verse: number;
-    content: string;
-}
-
-interface DictionaryResult {
-    word: string;
-    language: string;
-    definition: string;
-}
-
-interface ProverbResult {
-    id: number;
-    text: string;
     author?: string;
 }
 
-// Cache pour les documents indexés
+// ================================================
+// ÉTAT GLOBAL (Singleton)
+// ================================================
+
 let documentCache: IndexedDocument[] = [];
 let idfCache: Map<string, number> = new Map();
+let isIndexed = false;
+let isIndexing = false;
+let indexingPromise: Promise<void> | null = null;
+
+// ================================================
+// TOKENIZATION & TEXT PROCESSING
+// ================================================
 
 /**
- * Extrait et nettoie les mots-clés d'un texte
+ * Extrait et nettoie les tokens d'un texte (supprime accents, ponctuation, stop words)
  */
-const extractKeywords = (text: string): string[] => {
+const extractTokens = (text: string): string[] => {
     return text
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')  // Supprimer accents
-        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?'"]/g, " ")
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?\[\]'"«»…]/g, " ")
+        .replace(/\d+/g, " ")            // Supprimer les nombres
         .split(/\s+/)
         .filter((word) => word.length > 2 && !STOP_WORDS.has(word));
 };
 
+// ================================================
+// TF-IDF CALCULATIONS
+// ================================================
+
 /**
- * Calcule le Term Frequency (TF)
+ * Calcule le Term Frequency (TF) normalisé
  */
 const calculateTF = (tokens: string[]): Map<string, number> => {
     const tf = new Map<string, number>();
     const totalTokens = tokens.length;
+    if (totalTokens === 0) return tf;
 
     for (const token of tokens) {
         tf.set(token, (tf.get(token) || 0) + 1);
@@ -105,19 +123,49 @@ const calculateTF = (tokens: string[]): Map<string, number> => {
 };
 
 /**
- * Calcule le TF-IDF pour un document
+ * Calcule l'IDF (Inverse Document Frequency) pour tout le corpus
+ * IDF(t) = log(N / (1 + df(t)))  où df(t) = nombre de docs contenant t
+ */
+const calculateIDF = (documents: IndexedDocument[]): Map<string, number> => {
+    const idf = new Map<string, number>();
+    const N = documents.length;
+    if (N === 0) return idf;
+
+    // Document Frequency: compter dans combien de docs chaque terme apparaît
+    const df = new Map<string, number>();
+    for (const doc of documents) {
+        const uniqueTokens = new Set(doc.tokens);
+        for (const token of uniqueTokens) {
+            df.set(token, (df.get(token) || 0) + 1);
+        }
+    }
+
+    // Calculer IDF
+    for (const [token, docFreq] of df) {
+        idf.set(token, Math.log(N / (1 + docFreq)));
+    }
+
+    return idf;
+};
+
+/**
+ * Calcule le vecteur TF-IDF pour un ensemble de tokens
  */
 const calculateTFIDF = (tokens: string[], idf: Map<string, number>): Map<string, number> => {
     const tf = calculateTF(tokens);
     const tfidf = new Map<string, number>();
 
     for (const [token, tfValue] of tf) {
-        const idfValue = idf.get(token) || Math.log(1000); // Default IDF pour mots rares
+        const idfValue = idf.get(token) || Math.log(documentCache.length || 1000);
         tfidf.set(token, tfValue * idfValue);
     }
 
     return tfidf;
 };
+
+// ================================================
+// SIMILARITÉ COSINUS
+// ================================================
 
 /**
  * Calcule la similarité cosinus entre deux vecteurs TF-IDF
@@ -127,7 +175,6 @@ const cosineSimilarity = (vec1: Map<string, number>, vec2: Map<string, number>):
     let norm1 = 0;
     let norm2 = 0;
 
-    // Calculer le produit scalaire et la norme de vec1
     for (const [token, value] of vec1) {
         norm1 += value * value;
         if (vec2.has(token)) {
@@ -135,7 +182,6 @@ const cosineSimilarity = (vec1: Map<string, number>, vec2: Map<string, number>):
         }
     }
 
-    // Calculer la norme de vec2
     for (const value of vec2.values()) {
         norm2 += value * value;
     }
@@ -144,26 +190,184 @@ const cosineSimilarity = (vec1: Map<string, number>, vec2: Map<string, number>):
     norm2 = Math.sqrt(norm2);
 
     if (norm1 === 0 || norm2 === 0) return 0;
-
     return dotProduct / (norm1 * norm2);
 };
 
+// ================================================
+// INDEXATION DES DOCUMENTS DEPUIS SQLITE
+// ================================================
+
 /**
- * Recherche sémantique basée sur TF-IDF
+ * Charge et indexe tous les documents depuis SQLite (lazy, une seule fois)
+ * Sources: textes religieux, proverbes, dictionnaire
  */
-const semanticSearch = (query: string, documents: IndexedDocument[], limit: number = 5): RAGResult[] => {
-    const queryTokens = extractKeywords(query);
-    if (queryTokens.length === 0) return [];
+const buildIndex = async (): Promise<void> => {
+    // Si déjà indexé, ne rien faire
+    if (isIndexed) return;
+
+    // Si une indexation est en cours, attendre qu'elle finisse
+    if (isIndexing && indexingPromise) {
+        await indexingPromise;
+        return;
+    }
+
+    isIndexing = true;
+    indexingPromise = (async () => {
+        try {
+            console.log("📚 RAG: Building TF-IDF vector index...");
+            const startTime = Date.now();
+            const docs: IndexedDocument[] = [];
+            const db = await getDB();
+
+            // 1. Charger les textes religieux
+            try {
+                const religiousTexts = await db.getAllAsync(
+                    "SELECT id, source, book, chapter, verse, content FROM religious_texts LIMIT 2000"
+                ) as any[];
+
+                for (const row of religiousTexts) {
+                    const tokens = extractTokens(row.content);
+                    if (tokens.length > 0) {
+                        docs.push({
+                            id: `religious_${row.id}`,
+                            source: row.source,
+                            content: row.content,
+                            tokens,
+                            tfidf: new Map(), // Calculé après IDF
+                            book: row.book,
+                            chapter: row.chapter,
+                            verse: row.verse,
+                        });
+                    }
+                }
+                console.log(`  ✅ ${religiousTexts.length} textes religieux chargés`);
+            } catch (e) {
+                console.log("  ⚠️ Table religious_texts vide ou absente");
+            }
+
+            // 2. Charger les proverbes
+            try {
+                const proverbs = await db.getAllAsync(
+                    "SELECT id, content, author, source, language FROM proverbs LIMIT 500"
+                ) as any[];
+
+                for (const row of proverbs) {
+                    const tokens = extractTokens(row.content);
+                    if (tokens.length > 0) {
+                        docs.push({
+                            id: `proverb_${row.id}`,
+                            source: row.source || 'proverbe',
+                            content: row.content,
+                            tokens,
+                            tfidf: new Map(),
+                            author: row.author,
+                            language: row.language,
+                        });
+                    }
+                }
+                console.log(`  ✅ ${proverbs.length} proverbes chargés`);
+            } catch (e) {
+                console.log("  ⚠️ Table proverbs vide ou absente");
+            }
+
+            // 3. Charger le dictionnaire
+            try {
+                const dictEntries = await db.getAllAsync(
+                    "SELECT id, word, definition, language, source FROM dictionaries LIMIT 1000"
+                ) as any[];
+
+                for (const row of dictEntries) {
+                    const text = `${row.word}: ${row.definition}`;
+                    const tokens = extractTokens(text);
+                    if (tokens.length > 0) {
+                        docs.push({
+                            id: `dict_${row.id}`,
+                            source: `dictionnaire_${row.language}`,
+                            content: text,
+                            tokens,
+                            tfidf: new Map(),
+                            word: row.word,
+                            language: row.language,
+                        });
+                    }
+                }
+                console.log(`  ✅ ${dictEntries.length} entrées dictionnaire chargées`);
+            } catch (e) {
+                console.log("  ⚠️ Table dictionaries vide ou absente");
+            }
+
+            // 4. Charger les encyclopédies
+            try {
+                const encyclopedias = await db.getAllAsync(
+                    "SELECT id, title, content, category, source, language FROM encyclopedias LIMIT 500"
+                ) as any[];
+
+                for (const row of encyclopedias) {
+                    const text = `${row.title}: ${row.content}`;
+                    const tokens = extractTokens(text);
+                    if (tokens.length > 0) {
+                        docs.push({
+                            id: `encyclo_${row.id}`,
+                            source: row.source || 'encyclopédie',
+                            content: text,
+                            tokens,
+                            tfidf: new Map(),
+                            language: row.language,
+                        });
+                    }
+                }
+                console.log(`  ✅ ${encyclopedias.length} articles encyclopédiques chargés`);
+            } catch (e) {
+                console.log("  ⚠️ Table encyclopedias vide ou absente");
+            }
+
+            // 5. Calculer l'IDF global sur tout le corpus
+            idfCache = calculateIDF(docs);
+            console.log(`  📊 IDF calculé: ${idfCache.size} termes uniques`);
+
+            // 5. Calculer TF-IDF pour chaque document
+            for (const doc of docs) {
+                doc.tfidf = calculateTFIDF(doc.tokens, idfCache);
+            }
+
+            documentCache = docs;
+            isIndexed = true;
+
+            const elapsed = Date.now() - startTime;
+            console.log(`✅ RAG Index built: ${docs.length} documents indexed in ${elapsed}ms`);
+        } catch (error) {
+            console.error("❌ RAG: Failed to build index:", error);
+            // On ne bloque pas l'app si l'indexation échoue
+        } finally {
+            isIndexing = false;
+        }
+    })();
+
+    await indexingPromise;
+};
+
+// ================================================
+// RECHERCHE SÉMANTIQUE VECTORIELLE
+// ================================================
+
+/**
+ * Recherche sémantique par similarité cosinus TF-IDF
+ * @param query - Texte de recherche de l'utilisateur
+ * @param limit - Nombre max de résultats
+ * @param minScore - Score minimum de pertinence (0-1)
+ */
+const semanticSearch = (query: string, limit: number = 5, minScore: number = 0.03): RAGResult[] => {
+    const queryTokens = extractTokens(query);
+    if (queryTokens.length === 0 || documentCache.length === 0) return [];
 
     const queryTFIDF = calculateTFIDF(queryTokens, idfCache);
 
     const results: { doc: IndexedDocument; score: number }[] = [];
 
-    for (const doc of documents) {
-        const docTFIDF = doc.tfidf || calculateTFIDF(doc.tokens, idfCache);
-        const score = cosineSimilarity(queryTFIDF, docTFIDF);
+    for (const doc of documentCache) {
+        const score = cosineSimilarity(queryTFIDF, doc.tfidf);
 
-        if (score > 0.05) { // Seuil minimum de pertinence
+        if (score > minScore) {
             results.push({ doc, score });
         }
     }
@@ -176,94 +380,54 @@ const semanticSearch = (query: string, documents: IndexedDocument[], limit: numb
         source: r.doc.source,
         content: r.doc.content,
         score: r.score,
+        book: r.doc.book,
+        chapter: r.doc.chapter,
+        verse: r.doc.verse,
+        author: r.doc.author,
     }));
 };
 
+// ================================================
+// POINT D'ENTRÉE PRINCIPAL - getRAGContext
+// ================================================
+
 /**
- * Récupère le contexte RAG pour une requête utilisateur
- * Combine recherche dans textes religieux, dictionnaires, et proverbes
+ * Récupère le contexte RAG vectoriel pour une requête utilisateur.
+ * 
+ * 1. Indexe le corpus au premier appel (lazy init)
+ * 2. Effectue une recherche sémantique TF-IDF + cosinus
+ * 3. Formate les résultats en contexte textuel pour le LLM/assistant
  */
 export const getRAGContext = async (userQuery: string): Promise<string> => {
     try {
-        const keywords = extractKeywords(userQuery);
-        console.log("RAG Keywords extracted:", keywords);
+        // Lazy indexation au premier appel
+        await buildIndex();
 
-        if (keywords.length === 0) {
+        const queryTokens = extractTokens(userQuery);
+        console.log("🔍 RAG Vector Search — keywords:", queryTokens.slice(0, 5));
+
+        if (queryTokens.length === 0) {
             return "";
         }
 
-        // Limiter à 3 mots-clés principaux
-        const topKeywords = keywords.slice(0, 3);
-        const allResults: RAGResult[] = [];
+        // Recherche vectorielle par similarité cosinus
+        const vectorResults = semanticSearch(userQuery, 5, 0.03);
 
-        // 1. Recherche dans les textes religieux
-        for (const word of topKeywords) {
-            try {
-                const results = await searchReligiousTexts(word) as ReligiousTextResult[];
-                for (const r of results) {
-                    allResults.push({
-                        id: `${r.source}_${r.book}_${r.chapter}_${r.verse}`,
-                        source: r.source,
-                        content: r.content,
-                        score: 0.8, // Score de base pour correspondance exacte
-                        book: r.book,
-                        chapter: r.chapter,
-                        verse: r.verse,
-                    });
-                }
-            } catch (e) {
-                console.log(`RAG: No religious texts for "${word}"`);
-            }
-        }
-
-        // 2. Recherche dans les dictionnaires
-        for (const word of topKeywords) {
-            try {
-                const results = await searchDictionary(word) as DictionaryResult[];
-                for (const r of results) {
-                    allResults.push({
-                        id: `dict_${r.word}_${r.language}`,
-                        source: `Dictionnaire ${r.language.toUpperCase()}`,
-                        content: `${r.word}: ${r.definition}`,
-                        score: 0.6,
-                    });
-                }
-            } catch (e) {
-                console.log(`RAG: No dictionary entries for "${word}"`);
-            }
-        }
-
-        // 3. Recherche dans les proverbes
-        try {
-            const proverbResults = await searchProverbs(topKeywords[0]) as ProverbResult[];
-            for (const p of proverbResults.slice(0, 2)) {
-                allResults.push({
-                    id: `proverb_${p.id}`,
-                    source: p.author || 'Proverbe',
-                    content: p.text,
-                    score: 0.7,
-                });
-            }
-        } catch (e) {
-            console.log("RAG: No proverbs found");
-        }
-
-        // Dédupliquer par ID et garder les meilleurs scores
-        const uniqueResults = Array.from(
-            new Map(allResults.map((item) => [item.id, item])).values()
-        )
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 5);
-
-        if (uniqueResults.length === 0) {
+        if (vectorResults.length === 0) {
+            console.log("  📭 Aucun résultat vectoriel trouvé");
             return "";
         }
 
-        // Formater le contexte
-        const context = uniqueResults
+        console.log(`  📊 ${vectorResults.length} résultats trouvés (meilleur score: ${vectorResults[0].score.toFixed(3)})`);
+
+        // Formater le contexte pour le LLM
+        const context = vectorResults
             .map((row) => {
                 if (row.book && row.chapter !== undefined && row.verse !== undefined) {
-                    return `[${row.source} - ${row.book} ${row.chapter}:${row.verse}] ${row.content}`;
+                    return `[${row.source} — ${row.book} ${row.chapter}:${row.verse}] ${row.content}`;
+                }
+                if (row.author) {
+                    return `[${row.source} — ${row.author}] ${row.content}`;
                 }
                 return `[${row.source}] ${row.content}`;
             })
@@ -271,18 +435,48 @@ export const getRAGContext = async (userQuery: string): Promise<string> => {
 
         return `Voici des ressources pertinentes:\n${context}`;
     } catch (error) {
-        console.error("Error retrieving RAG context:", error);
+        console.error("RAG Error:", error);
         return "";
     }
 };
+
+// ================================================
+// API PUBLIQUE
+// ================================================
+
+/**
+ * Force la reconstruction de l'index (utile après import de nouvelles données)
+ */
+export const rebuildRAGIndex = async (): Promise<void> => {
+    isIndexed = false;
+    documentCache = [];
+    idfCache = new Map();
+    await buildIndex();
+};
+
+/**
+ * Retourne des stats sur l'index RAG
+ */
+export const getRAGStats = () => ({
+    isIndexed,
+    documentCount: documentCache.length,
+    vocabularySize: idfCache.size,
+    sources: {
+        religious: documentCache.filter(d => d.id.startsWith('religious_')).length,
+        proverbs: documentCache.filter(d => d.id.startsWith('proverb_')).length,
+        dictionary: documentCache.filter(d => d.id.startsWith('dict_')).length,
+    }
+});
 
 /**
  * Exporte les fonctions utilitaires pour les tests
  */
 export const ragUtils = {
-    extractKeywords,
+    extractKeywords: extractTokens,
     calculateTF,
     calculateTFIDF,
     cosineSimilarity,
     semanticSearch,
+    buildIndex,
+    getRAGStats,
 };

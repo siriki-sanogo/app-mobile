@@ -1,14 +1,12 @@
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme, Switch, Alert } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Switch, Alert } from "react-native";
 import { useAppContext } from "../contexte/AppContext";
 import { useTranslation } from "../contexte/i18n";
 import * as Haptics from "expo-haptics";
 
 export default function SettingsScreen() {
-    const { profile, setProfile, setCurrentScreen, logout } = useAppContext();
-    const colorScheme = useColorScheme();
-    const darkMode = colorScheme === "dark";
+    const { profile, setProfile, updateProfile, setCurrentScreen, logout, darkMode, setDarkMode } = useAppContext();
     const t = useTranslation(profile?.language || "fr");
 
     const handleToggle = async (key: string) => {
@@ -74,6 +72,14 @@ export default function SettingsScreen() {
                             <Text style={[styles.rowLabel, darkMode ? { color: "#E5E7EB" } : {}]}>{t("notifications")}</Text>
                             <Switch value={true} onValueChange={() => handleToggle('notifications')} />
                         </View>
+                        <View style={styles.separator} />
+                        <View style={styles.row}>
+                            <View style={[styles.iconBox, { backgroundColor: "#E0E7FF" }]}>
+                                <Feather name="moon" size={18} color="#4F46E5" />
+                            </View>
+                            <Text style={[styles.rowLabel, darkMode ? { color: "#E5E7EB" } : {}]}>{profile?.language === 'en' ? 'Dark Mode' : 'Mode sombre'}</Text>
+                            <Switch value={darkMode} onValueChange={(val) => setDarkMode(val)} />
+                        </View>
                     </View>
                 </View>
 
@@ -87,6 +93,51 @@ export default function SettingsScreen() {
                             </View>
                             <Text style={[styles.rowLabel, darkMode ? { color: "#E5E7EB" } : {}]}>{t("face_id")}</Text>
                             <Switch value={false} onValueChange={() => handleToggle('faceid')} />
+                        </View>
+                    </View>
+                </View>
+
+                {/* Content Sources Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>{t("section_content") || "SOURCE"}</Text>
+                    <View style={[styles.card, darkMode ? { backgroundColor: "#1F2937" } : { backgroundColor: "white" }]}>
+                        <View style={styles.row}>
+                            <View style={[styles.iconBox, { backgroundColor: "#DBEAFE" }]}>
+                                <Feather name="book-open" size={18} color="#2563EB" />
+                            </View>
+                            <Text style={[styles.rowLabel, darkMode ? { color: "#E5E7EB" } : {}]}>{t("bible") || "Bible"}</Text>
+                            <Switch
+                                value={profile?.preferences?.showBible ?? true}
+                                onValueChange={(val) => {
+                                    if (profile) updateProfile({ preferences: { showBible: val, showCoran: profile.preferences?.showCoran ?? true, showAfrican: profile.preferences?.showAfrican ?? true } });
+                                }}
+                            />
+                        </View>
+                        <View style={styles.separator} />
+                        <View style={styles.row}>
+                            <View style={[styles.iconBox, { backgroundColor: "#E0E7FF" }]}>
+                                <Feather name="book" size={18} color="#4F46E5" />
+                            </View>
+                            <Text style={[styles.rowLabel, darkMode ? { color: "#E5E7EB" } : {}]}>{t("coran") || "Quran"}</Text>
+                            <Switch
+                                value={profile?.preferences?.showCoran ?? true}
+                                onValueChange={(val) => {
+                                    if (profile) updateProfile({ preferences: { showBible: profile.preferences?.showBible ?? true, showCoran: val, showAfrican: profile.preferences?.showAfrican ?? true } });
+                                }}
+                            />
+                        </View>
+                        <View style={styles.separator} />
+                        <View style={styles.row}>
+                            <View style={[styles.iconBox, { backgroundColor: "#DCFCE7" }]}>
+                                <Feather name="globe" size={18} color="#16A34A" />
+                            </View>
+                            <Text style={[styles.rowLabel, darkMode ? { color: "#E5E7EB" } : {}]}>{t("africanTexts") || "African Texts"}</Text>
+                            <Switch
+                                value={profile?.preferences?.showAfrican ?? true}
+                                onValueChange={(val) => {
+                                    if (profile) updateProfile({ preferences: { showBible: profile.preferences?.showBible ?? true, showCoran: profile.preferences?.showCoran ?? true, showAfrican: val } });
+                                }}
+                            />
                         </View>
                     </View>
                 </View>
@@ -122,8 +173,8 @@ export default function SettingsScreen() {
 
                 <Text style={styles.versionText}>{t("version")} 1.0.0 (Build 42)</Text>
                 <View style={{ height: 40 }} />
-            </ScrollView>
-        </View>
+            </ScrollView >
+        </View >
     );
 }
 

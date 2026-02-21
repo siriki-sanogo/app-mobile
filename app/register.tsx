@@ -45,8 +45,28 @@ export default function RegisterScreen() {
       HapticFeedback.notificationAsync(HapticFeedback.NotificationFeedbackType.Error);
       return;
     }
-    if (password.length < 4) {
-      setError("Le mot de passe est trop court.");
+    if (password.length < 8) {
+      setError("Le mot de passe doit contenir au moins 8 caractères.");
+      HapticFeedback.notificationAsync(HapticFeedback.NotificationFeedbackType.Error);
+      return;
+    }
+    if (!/[A-Z]/.test(password)) {
+      setError("Le mot de passe doit contenir au moins une majuscule.");
+      HapticFeedback.notificationAsync(HapticFeedback.NotificationFeedbackType.Error);
+      return;
+    }
+    if (!/[a-z]/.test(password)) {
+      setError("Le mot de passe doit contenir au moins une minuscule.");
+      HapticFeedback.notificationAsync(HapticFeedback.NotificationFeedbackType.Error);
+      return;
+    }
+    if (!/[0-9]/.test(password)) {
+      setError("Le mot de passe doit contenir au moins un chiffre.");
+      HapticFeedback.notificationAsync(HapticFeedback.NotificationFeedbackType.Error);
+      return;
+    }
+    if (!/[^A-Za-z0-9]/.test(password)) {
+      setError("Le mot de passe doit contenir au moins un caractère spécial.");
       HapticFeedback.notificationAsync(HapticFeedback.NotificationFeedbackType.Error);
       return;
     }
@@ -178,6 +198,32 @@ export default function RegisterScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Password strength indicators */}
+            {password.length > 0 && (
+              <View style={{ marginTop: 8, gap: 3 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Feather name={password.length >= 8 ? "check-circle" : "x-circle"} size={14} color={password.length >= 8 ? "#16A34A" : "#9CA3AF"} />
+                  <Text style={{ fontSize: 12, color: password.length >= 8 ? "#16A34A" : "#9CA3AF", fontWeight: "500" }}>8 caractères minimum</Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Feather name={/[A-Z]/.test(password) ? "check-circle" : "x-circle"} size={14} color={/[A-Z]/.test(password) ? "#16A34A" : "#9CA3AF"} />
+                  <Text style={{ fontSize: 12, color: /[A-Z]/.test(password) ? "#16A34A" : "#9CA3AF", fontWeight: "500" }}>Une lettre majuscule</Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Feather name={/[a-z]/.test(password) ? "check-circle" : "x-circle"} size={14} color={/[a-z]/.test(password) ? "#16A34A" : "#9CA3AF"} />
+                  <Text style={{ fontSize: 12, color: /[a-z]/.test(password) ? "#16A34A" : "#9CA3AF", fontWeight: "500" }}>Une lettre minuscule</Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Feather name={/[0-9]/.test(password) ? "check-circle" : "x-circle"} size={14} color={/[0-9]/.test(password) ? "#16A34A" : "#9CA3AF"} />
+                  <Text style={{ fontSize: 12, color: /[0-9]/.test(password) ? "#16A34A" : "#9CA3AF", fontWeight: "500" }}>Un chiffre</Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Feather name={/[^A-Za-z0-9]/.test(password) ? "check-circle" : "x-circle"} size={14} color={/[^A-Za-z0-9]/.test(password) ? "#16A34A" : "#9CA3AF"} />
+                  <Text style={{ fontSize: 12, color: /[^A-Za-z0-9]/.test(password) ? "#16A34A" : "#9CA3AF", fontWeight: "500" }}>Un caractère spécial (!@#$...)</Text>
+                </View>
+              </View>
+            )}
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Genre</Text>

@@ -13,7 +13,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useColorScheme
 } from "react-native";
 import { useAppContext } from "../contexte/AppContext";
 import { useTranslation } from "../contexte/i18n";
@@ -22,10 +21,8 @@ const { width } = Dimensions.get("window");
 const IS_LARGE_SCREEN = width >= 768;
 
 export default function ProfileScreen() {
-  const { profile, setProfile, setCurrentScreen } = useAppContext();
+  const { profile, setProfile, updateProfile, setCurrentScreen, darkMode } = useAppContext();
   const router = useRouter();
-  const colorScheme = useColorScheme();
-  const darkMode = colorScheme === "dark";
   const t = useTranslation(profile?.language || "fr");
 
   const [isEditing, setIsEditing] = useState(false);
@@ -88,7 +85,7 @@ export default function ProfileScreen() {
       },
     };
 
-    setProfile(updatedProfile);
+    updateProfile(updatedProfile);
     setIsEditing(false);
     await HapticFeedback.notificationAsync(HapticFeedback.NotificationFeedbackType.Success);
 

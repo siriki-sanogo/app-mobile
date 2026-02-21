@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
-  useColorScheme,
 } from "react-native";
 import { useAppContext } from "../contexte/AppContext";
 import { useTranslation } from "../contexte/i18n";
@@ -25,12 +24,10 @@ type Props = {
 };
 
 export default function SideMenu({ visible, onClose, currentScreen, setCurrentScreen }: Props) {
-  const { profile } = useAppContext();
+  const { profile, darkMode, setDarkMode } = useAppContext();
   const t = useTranslation(profile?.language || "fr");
   const translateX = useRef(new Animated.Value(-MENU_WIDTH)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
-  const colorScheme = useColorScheme();
-  const darkMode = colorScheme === "dark";
   const userName = profile?.name || "Utilisateur";
 
   useEffect(() => {
@@ -132,7 +129,7 @@ export default function SideMenu({ visible, onClose, currentScreen, setCurrentSc
             <Feather name="moon" size={18} color="#6B7280" />
             <Text style={[styles.itemLabel, { marginLeft: 10 }]}>{t("menu_darkmode")}</Text>
           </View>
-          <Switch value={darkMode} onValueChange={() => { }} />
+          <Switch value={darkMode} onValueChange={(val) => setDarkMode(val)} />
         </View>
       </Animated.View>
     </>

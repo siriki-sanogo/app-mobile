@@ -1,13 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAppContext } from "../contexte/AppContext";
 import { useTranslation } from "../contexte/i18n";
 
 export default function PrivacyScreen() {
-    const { profile, setCurrentScreen } = useAppContext();
-    const colorScheme = useColorScheme();
-    const darkMode = colorScheme === "dark";
+    const { profile, setCurrentScreen, darkMode } = useAppContext();
     const t = useTranslation(profile?.language || "fr");
 
     return (
